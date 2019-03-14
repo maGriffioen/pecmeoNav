@@ -1,22 +1,26 @@
+
+#Object for Kepler Orbits
 struct KeplerOrbit
-    a::Float64
-    e::Float64
-    i::Float64
+    a::Float64      #Semi-major axis
+    e::Float64      #Eccentricity
+    i::Float64      #Inclination
     raan::Float64   #Right ascension of the ascending node
     aop::Float64    #Argument of perriapsis
     tanom::Float64  #True anomaly
     mu::Float64
 end
 
+#Object for Cartesian states
 struct CartesianState
-    x::Float64
-    y::Float64
-    z::Float64
-    vx::Float64
-    vy::Float64
-    vz::Float64
+    x::Float64      #X-position
+    y::Float64      #Y-position
+    z::Float64      #Z-position
+    vx::Float64     #X-velocity
+    vy::Float64     #Y-velocity
+    vz::Float64     #Z-velocity
 end
 
+#Object for Cartesian orbits (=cartesian state + gravitational parameter)
 struct CartesianOrbit
     x::Float64
     y::Float64
@@ -26,10 +30,19 @@ struct CartesianOrbit
     vz::Float64
     mu::Float64
 end
-
 #Create Cartesian orbit directly from cartesian state
 CartesianOrbit(cs::CartesianState, mu) =
     CartesanOrbit(cs.x, cs.y, cs.z, cs.vx, cs.vy, cs.vz, mu)
+CartesianOrbit(kepOrbit::KeplerOrbit) = keplerToCartesian(kepOrbit::KeplerOrbit)
+
+#Object for a constellation of kepler orbits
+struct KeplerConstellation
+    orbits::Array{KeplerOrbit,1}
+end
+KeplerConstellation() = KeplerConstellation([])
+Base.getindex(constel::KeplerConstellation, i::Int) = constel.orbits[i]
+Base.push!(constel::KeplerConstellation, orbit::KeplerOrbit) = push!(constel.orbits, orbit)
+Base.size(constel::KeplerConstellation) = length(constel.orbits)
 
 #Transform Kepler orbit to a Carthesian orbit type
 function keplerToCartesian(keplerorbit::KeplerOrbit)
@@ -60,6 +73,16 @@ function keplerToCartesian(keplerorbit::KeplerOrbit)
     CartesianOrbit(pos3d[1], pos3d[2], pos3d[3], vel3d[1], vel3d[2], vel3d[3], ko.mu)
 end
 
+Base.position(cs::CartesianState) = (cs.x, cs.y, cs.z)
+Base.position(co::CartesianOrbit) = (co.x, co.y, co.z)
+Base.position(ko::KeplerOrbit) = position(keplerToCartesian(ko))
+
+#Find orbital period of Kepler orbit
+function findOrbitalPeriod(keplerorbit::KeplerOrbit)
+    ko = keplerorbit
+    return 2 * pi * sqrt((ko.a^3) / ko.mu)
+end
+
 #Find the eccentric anomaly for an orbit from true anomaly and eccentricity
 function findEccentricAnomaly(trueAnomaly::Number, eccentricity::Number)
     #Equation 6.35 Astrodynamics reader
@@ -79,7 +102,6 @@ function findMeanAnomaly(trueAnomaly::Number, eccentricity::Number)
     return meanAnomaly
 end
 findMeanAnomaly(ko::KeplerOrbit) = findMeanAnomaly(ko.tanom, ko.e)
-
 
 function meanToTrueAnomaly(meanAnomaly::Number, eccentricity::Number,
     tolerance::Float64)
@@ -137,4 +159,13 @@ function propagateKeplerOrbit(ko::KeplerOrbit, timeIncrement::Number)
     newTrueAnomaly = meanToTrueAnomaly(meanAnomaly, ko.e)
 
     return KeplerOrbit(ko.a, ko.e, ko.i, ko.raan, ko.aop, newTrueAnomaly, ko.mu)
+end
+
+#Propagate an entire constellation by looping over individual or bits
+function propagateKeplerOrbit(constellation::KeplerConstellation, timeIncrement::Number)
+    newConstellation = KeplerConstellation()
+    for kOrbit in constellation.orbits
+        push!( newConstellation, propagateKeplerOrbit(kOrbit, timeIncrement) )
+    end
+    return newConstellation
 end
