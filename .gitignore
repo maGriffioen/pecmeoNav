@@ -1,3 +1,5 @@
 *.pdf
 *.gif
 *.jpg
+/figs
+/tmp
