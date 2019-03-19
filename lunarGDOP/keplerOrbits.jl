@@ -90,7 +90,7 @@ Base.position(ko::KeplerOrbit) = position(keplerToCartesian(ko))
 Base.position(kc::KeplerConstellation) = [position(orbit) for orbit in kc.orbits]
 
 # Find orbital period of Kepler orbit
-function findOrbitalPeriod(keplerorbit::KeplerOrbit)
+function orbitalPeriod(keplerorbit::KeplerOrbit)
     ko = keplerorbit
     return 2 * pi * sqrt((ko.a^3) / ko.cbody.gravitationalParameter)
 end
@@ -186,7 +186,8 @@ end
 
 # Create a pecmeo constellation
 #   Polar - Polar - Equatorial
-function createCircPecmeo( radius::Float64, n_satellites::Tuple{Int, Int, Int}, cbody::Body;
+function createCircPecmeo( radius::Float64, n_satellites::Tuple{Int, Int, Int}, cbody::Body,
+    satSpacing::Tuple{Float64, Float64, Float64};
     initialOrbitShift::Tuple{Float64, Float64, Float64}= (0.0, 0.0, 0.0),
     equatorialRotation::Float64 = 0.0 )
 
@@ -198,7 +199,7 @@ function createCircPecmeo( radius::Float64, n_satellites::Tuple{Int, Int, Int}, 
             i = inclinations[i_orient]                              #inclination
             raan = equatorialRotation + (i_orient == 2 ? pi/2 : 0)  #right asc.
             aop = initialOrbitShift[i_orient]                       #arg. of periapsis
-            tanom = (2*pi / n_satellites[i_orient]) * (i_sat-1)     #true anomaly
+            tanom = satSpacing[i_orient] * (i_sat-1)     #true anomaly
             #Add Kepler orbit to the constellation
             push!( constellation,
                 KeplerOrbit(radius, 0.0, i,
@@ -210,3 +211,10 @@ function createCircPecmeo( radius::Float64, n_satellites::Tuple{Int, Int, Int}, 
 
     return constellation
 end
+
+createCircPecmeo( radius::Float64, n_satellites::Tuple{Int, Int, Int}, cbody::Body;
+    initialOrbitShift::Tuple{Float64, Float64, Float64}= (0.0, 0.0, 0.0),
+    equatorialRotation::Float64 = 0.0 )=
+    createCircPecmeo(radius, n_satellites, cbody, 2*pi ./ n_satellites;
+    initialOrbitShift = initialOrbitShift,
+    equatorialRotation = equatorialRotation)

@@ -40,7 +40,7 @@ function plotConstellation(constellation::KeplerConstellation;
             x_pos = []
             y_pos = []
             z_pos = []
-            for t in range(0, findOrbitalPeriod(constellation[isat]), length = 100)
+            for t in range(0, orbitalPeriod(constellation[isat]), length = 100)
                 cartOrbit = keplerToCartesian(propagateKeplerOrbit(constellation[isat], t))
                 append!(x_pos, cartOrbit.x/1e3)
                 append!(y_pos, cartOrbit.y/1e3)
@@ -76,7 +76,7 @@ function pointsInFullOrbit(kepOrbit::KeplerOrbit; n = 50)
     y_pos = zeros(n)
     z_pos = zeros(n)
 
-    for (i, t) in enumerate( range(0, findOrbitalPeriod(kepOrbit), length = n) )
+    for (i, t) in enumerate( range(0, orbitalPeriod(kepOrbit), length = n) )
         cartOrbit = keplerToCartesian(propagateKeplerOrbit(iss, t))
         x_pos[i] = cartOrbit.x
         y_pos[i] = cartOrbit.y
@@ -110,7 +110,7 @@ function animateConstellation(constellation::KeplerConstellation, frames::Int;
     end
 
     if (animation_time == 0)
-        timestep = findOrbitalPeriod(constellation[1]) / (frames+1)
+        timestep = orbitalPeriod(constellation[1]) / (frames+1)
     end
 
     time = 0
