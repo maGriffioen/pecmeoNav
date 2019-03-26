@@ -1,14 +1,6 @@
 using Plots, ProgressMeter, LinearAlgebra
-
-# pyplot(leg=false, ticks=nothing)
-# PyPlot.matplotlib.use("TkAgg")
-
-include("bodies.jl")
-include("keplerOrbits.jl")
-include("mathTools.jl")
-include("navGeom.jl")
-include("plotTools.jl")
-include("gpsData.jl")
+include("../src/NaviSimu.jl")
+using Main.NaviSimu
 
 function distances(refPoint, pointVector)
    distVec = map(x -> norm(pointVector[x] .- refPoint), 1:length(pointVector))
@@ -19,7 +11,7 @@ function pointPositionIteration(aPriEst, rangeData, navconPos)
    nNavsat = length(navconPos)
    aPriPos = Tuple(aPriEst[1:3])
    aPriRange = map(x -> norm(aPriPos .- navconPos[x])+aPriEst[4], 1:length(navconPos))
-   designMat = findPPDesignMatrix(aPriPos, navconPos)
+   designMat = NaviSimu.findPPDesignMatrix(aPriPos, navconPos)
 
    #Least squares estimation of position correction
    deltaPos = inv(designMat' * designMat) * designMat' * (rangeData - aPriRange)
@@ -35,7 +27,7 @@ iss = KeplerOrbit(6787746.891, 0.000731104,
 
 
 # Lunar gps GDOP calculation without shadowing
-gpsfile = "lunarGDOP/cod20000.eph"
+gpsfile = "data/cod20000.eph"
 if !(:gpsdata in names(Main))
    @time gpsdata = openOrbitData(gpsfile)
 end

@@ -1,3 +1,12 @@
+# Define body type
+# For the definition of several bodies with data, see bodies.jl
+struct Body
+    name::String
+    gravitationalParameter::Float64
+    radius::Float64
+end
+Body(; name = "", gravitationalParameter, radius) =
+    Body(name, gravitationalParameter, radius)
 
 # Object for Kepler Orbits
 struct KeplerOrbit

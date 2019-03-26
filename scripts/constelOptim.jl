@@ -1,11 +1,7 @@
 using Plots, LinearAlgebra, BlackBoxOptim, ProgressMeter
 
-include("bodies.jl")
-include("keplerOrbits.jl")
-include("mathTools.jl")
-include("navGeom.jl")
-include("plotTools.jl")
-include("gpsData.jl")
+include("../src/NaviSimu.jl")
+using Main.NaviSimu
 
 # Best constellation (3, 3, 3) (for now) @ max_gdop = 1104.8
 # 0.804656413854996

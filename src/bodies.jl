@@ -1,14 +1,5 @@
 #Quick numbers from google.
-#Replace with well-sourced numbers
-
-struct Body
-    name::String
-    gravitationalParameter::Float64
-    radius::Float64
-end
-
-Body(; name = "", gravitationalParameter, radius) =
-    Body(name, gravitationalParameter, radius)
+#Replace with well-sourced numbers!!
 
 earth = Body(
     name = "Earth",

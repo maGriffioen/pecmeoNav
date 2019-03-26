@@ -3,12 +3,8 @@
 #
 using Plots, LinearAlgebra
 
-include("bodies.jl")
-include("keplerOrbits.jl")
-include("mathTools.jl")
-include("navGeom.jl")
-include("plotTools.jl")
-include("gpsData.jl")
+include("../src/NaviSimu.jl")
+using Main.NaviSimu
 
 n = 3
 # pecmeo = createCircPecmeo(26400e3, (2, 2, 2), earth, ((2/3)*pi, (2/3)*pi, (2/3)*pi); initialOrbitShift=(0.0, 0.0, 0.75*pi))
@@ -42,12 +38,12 @@ pecmeo5 = createCircPecmeo(26.4e6, (2, 2, 2), earth,
 
 
 dt = 100
-opc = orbitalPeriod(pecmeo[1])
+opc = orbitalPeriod(pecmeo1[1])
 oc = 1:trunc(Int, opc/dt)
 opm = orbitalPeriod(lunarOrbit)
 om = 1:trunc(Int, opm/dt)
 
-timevec_pecmeo = 0:10:orbitalPeriod(lunarOrbit)
+timevec_pecmeo = 0:dt:orbitalPeriod(lunarOrbit)
 @time gdop_pecmeo1_nd = map(x -> findNavGDOP(bodyPosition("Moon", 0), propagateKeplerOrbit(pecmeo1, x)), timevec_pecmeo)
 @time gdop_pecmeo2_nd = map(x -> findNavGDOP(bodyPosition("Moon", 0), propagateKeplerOrbit(pecmeo2, x)), timevec_pecmeo)
 @time gdop_pecmeo3_nd = map(x -> findNavGDOP(bodyPosition("Moon", 0), propagateKeplerOrbit(pecmeo3, x)), timevec_pecmeo)
