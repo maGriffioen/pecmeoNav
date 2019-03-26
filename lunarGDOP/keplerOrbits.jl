@@ -189,10 +189,11 @@ end
 function createCircPecmeo( radius::Float64, n_satellites::Tuple{Int, Int, Int}, cbody::Body,
     satSpacing::Tuple{Float64, Float64, Float64};
     initialOrbitShift::Tuple{Float64, Float64, Float64}= (0.0, 0.0, 0.0),
-    equatorialRotation::Float64 = 0.0 )
+    equatorialRotation::Float64 = 0.0,
+    inclination::Float64 = 0.0 )
 
     constellation = KeplerConstellation()
-    inclinations = (pi/2, pi/2, 0)
+    inclinations = (pi/2 + inclination, pi/2, inclination)
     for i_orient in 1:3
         for i_sat in 1:n_satellites[i_orient]
             #Calculate orbital elements
@@ -214,7 +215,7 @@ end
 
 createCircPecmeo( radius::Float64, n_satellites::Tuple{Int, Int, Int}, cbody::Body;
     initialOrbitShift::Tuple{Float64, Float64, Float64}= (0.0, 0.0, 0.0),
-    equatorialRotation::Float64 = 0.0 )=
+    equatorialRotation::Float64 = 0.0, inclination::Float64=0.0 )=
     createCircPecmeo(radius, n_satellites, cbody, 2*pi ./ n_satellites;
     initialOrbitShift = initialOrbitShift,
-    equatorialRotation = equatorialRotation)
+    equatorialRotation = equatorialRotation, inclination = inclination)
