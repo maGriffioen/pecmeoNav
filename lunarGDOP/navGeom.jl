@@ -1,25 +1,61 @@
-# Evaluate Covariance matrix of the Navigation system
-# For a reference point and a constellation (in given position)\
-function findNavCovmat(
+# Find the point position design matrix for a navigation solution
+function findPPDesignMatrix(
     refPoint::Tuple{Number, Number, Number},
     constelData::Array{Tuple{Float64, Float64, Float64}, 1} )
 
     n_navsats = size(constelData, 1)       #Number of navigation satellites
     mat_A = zeros(n_navsats, 4)     #Create empty A matrix
-    mat_A[:, 4] .= -1.0;            #Set -1 for time positions
+    mat_A[:, 4] .= 1.0            #Set -1 for time positions
 
     #Loop over the navigation satellites in the constellation
     for isat in 1:n_navsats
-        posnavsat = constelData[isat]        #Nav satellite position
-        posdiff = collect(posnavsat .- refPoint)    #Position difference
-        r  = norm(posdiff)             #Total distance
+        posnavsat = constelData[isat]               #Nav satellite position
+        posdiff = collect(refPoint .- posnavsat)    #Position difference
+        r  = norm(posdiff)                          #Total distance
         mat_A[isat, 1:3] = posdiff ./ r             #Write unit vector distances
     end
     # Return matrix of covariances
-    return inv(mat_A' * mat_A)
+    return mat_A
 end
-findNavCovmat( refPoint::Tuple{Number, Number, Number},
-     constel::KeplerConstellation ) = findNavCovmat(refPoint, position(constel))
+findPPDesignMatrix( refPoint::Tuple{Number, Number, Number},
+     constel::KeplerConstellation ) = findPPDesignMatrix(refPoint, position(constel))
+
+
+ # Evaluate Covariance matrix of the Navigation system
+ # For a reference point and a constellation (in given position)\
+ function findNavCovmat(
+     refPoint::Tuple{Number, Number, Number},
+     constelData::Array{Tuple{Float64, Float64, Float64}, 1} )
+     mat_A = findPPDesignMatrix(refPoint, constelData)
+     return inv(mat_A' * mat_A)
+ end
+ findNavCovmat( refPoint::Tuple{Number, Number, Number},
+      constel::KeplerConstellation ) = findNavCovmat(refPoint, position(constel))
+
+# # Evaluate Covariance matrix of the Navigation system
+# # For a reference point and a constellation (in given position)\
+# function findNavCovmat(
+#     refPoint::Tuple{Number, Number, Number},
+#     constelData::Array{Tuple{Float64, Float64, Float64}, 1} )
+#
+#     n_navsats = size(constelData, 1)       #Number of navigation satellites
+#     mat_A = zeros(n_navsats, 4)     #Create empty A matrix
+#     mat_A[:, 4] .= -1.0;            #Set -1 for time positions
+#
+#     #Loop over the navigation satellites in the constellation
+#     for isat in 1:n_navsats
+#         posnavsat = constelData[isat]        #Nav satellite position
+#         posdiff = collect(posnavsat .- refPoint)    #Position difference
+#         r  = norm(posdiff)             #Total distance
+#         mat_A[isat, 1:3] = posdiff ./ r             #Write unit vector distances
+#     end
+#     # Return matrix of covariances
+#     return inv(mat_A' * mat_A)
+# end
+# findNavCovmat( refPoint::Tuple{Number, Number, Number},
+#      constel::KeplerConstellation ) = findNavCovmat(refPoint, position(constel))
+
+
 
 #Find the GDOP for reference point and constellation
 #Uses Earth position at t=0 and Earth radius for shadowing
