@@ -12,6 +12,7 @@ moon = Body(
     radius = 1737e3
 )
 lunarOrbit = KeplerOrbit(384e6, 0.0, deg2rad(23.4 + 5.14), 0.0, 0.0, 0.0, earth)
+lightConst = 3e8
 
 function bodyPosition(bodyName::String, time::Number)
     if (bodyName == "Earth")

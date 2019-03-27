@@ -21,18 +21,6 @@ end
 Base.copy(ko::KeplerOrbit)=
     KeplerOrbit(ko.a, ko.e, ko.i, ko.raan, ko.aop, ko.tanom, ko.cbody)
 
-# Object for Cartesian states
-struct CartesianState
-    x::Float64      #X-position
-    y::Float64      #Y-position
-    z::Float64      #Z-position
-    vx::Float64     #X-velocity
-    vy::Float64     #Y-velocity
-    vz::Float64     #Z-velocity
-end
-Base.copy(cs::CartesianState) =
-    CartesianState(cs.x, cs.y, cs.z, cs.vx, cs.vy, cs.vz)
-
 # Object for Cartesian orbits (=cartesian state + gravitational parameter)
 struct CartesianOrbit
     x::Float64
@@ -44,8 +32,6 @@ struct CartesianOrbit
     cbody::Body     #Central body of orbit
 end
 # Create Cartesian orbit directly from cartesian state
-CartesianOrbit(cs::CartesianState, cbody) =
-    CartesanOrbit(cs.x, cs.y, cs.z, cs.vx, cs.vy, cs.vz, cbody)
 CartesianOrbit(kepOrbit::KeplerOrbit) = keplerToCartesian(kepOrbit::KeplerOrbit)
 Base.copy(co::CartesianOrbit) =
     CartesianOrbit(co.x, co.y, co.z, co.vx, co.vy, co.vz, co.cbody)
@@ -93,10 +79,14 @@ function keplerToCartesian(keplerorbit::KeplerOrbit)
     CartesianOrbit(pos3d[1], pos3d[2], pos3d[3], vel3d[1], vel3d[2], vel3d[3], ko.cbody)
 end
 
-Base.position(cs::CartesianState) = (cs.x, cs.y, cs.z)
 Base.position(co::CartesianOrbit) = (co.x, co.y, co.z)
 Base.position(ko::KeplerOrbit) = position(keplerToCartesian(ko))
 Base.position(kc::KeplerConstellation) = [position(orbit) for orbit in kc.orbits]
+
+state(ko::KeplerOrbit) = state(keplerToCartesian(ko))
+state(co::CartesianOrbit) = [x, y, z, vx, vy, vz]
+state(kc::KeplerConstellation) = [state(orbit) for orbit in kc.orbits]
+state(orbit, time::Number) = state(propagateKeplerOrbit(orbit, time))
 
 # Find orbital period of Kepler orbit
 function orbitalPeriod(keplerorbit::KeplerOrbit)
