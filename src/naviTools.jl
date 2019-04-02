@@ -75,6 +75,22 @@ end
 findNavGDOP(refPoint::Tuple{Number, Number, Number},
     constel::KeplerConstellation) = findNavGDOP(refPoint, position(constel))
 
+function findNavPDOP(
+    refPoint::Tuple{Number, Number, Number},
+    constelData::Array{Tuple{Float64, Float64, Float64}, 1} )
+    los = hasLineOfSight(refPoint, constelData, bodyPosition(earth, 0), earth.radius)
+    PDOP = 1e9   #If gdop cannot be calculated (too little satellites or bad geometry)
+    try
+        global mat_Q = findNavCovmat(refPoint, constelData[los])
+        PDOP = sqrt(sum(diag(mat_Q)[1:3]))   #Calculate gdop
+    catch
+    end
+
+    return PDOP
+end
+findNavPDOP(refPoint::Tuple{Number, Number, Number},
+    constel::KeplerConstellation) = findNavGDOP(refPoint, position(constel))
+
 function hasLineOfSight(receiverLocation::Tuple{Float64, Float64, Float64},
     transmitterLocation::Tuple{Float64, Float64, Float64},
     bodyLocation::Tuple{Float64, Float64, Float64},
