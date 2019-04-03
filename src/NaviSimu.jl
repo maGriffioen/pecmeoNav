@@ -27,12 +27,15 @@ export
     hasLineOfSightEarth,
     hasLineOfSight,
     findNavGDOP,
+    findNavPDOP,
+    pointPosition,
 
     #naviSimu.jl
     instaSignal,
 
     #io/*
     openOrbitData,
+    gpsKepler,
     plotConstellation,
     plotConstellationConnections,
     animateConstellation
