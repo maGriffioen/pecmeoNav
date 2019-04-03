@@ -123,3 +123,24 @@ hasLineOfSight(receiverLoc::Tuple{Float64, Float64, Float64},
 
 hasLineOfSightEarth(receiverLoc, transmitterLoc) =
     hasLineOfSight(receiverLoc, transmitterLoc, bodyPosition(earth.name, 0), earth.radius)
+
+
+function pointPosition(ranges, navSats; niter = 10)
+   esti = [0, 0, 0, 0]
+   for i in 1:niter
+      esti = pointPositionIteration(esti, ranges, navSats)
+   end
+   return Tuple(esti)
+end
+
+
+function pointPositionIteration(aPriEst, rangeData, navconPos)
+   nNavsat = length(navconPos)
+   aPriPos = Tuple(aPriEst[1:3])
+   aPriRange = map(x -> norm(aPriPos .- navconPos[x])+aPriEst[4], 1:length(navconPos))
+   designMat = findPPDesignMatrix(aPriPos, navconPos)
+
+   #Least squares estimation of position correction
+   deltaPos = pinv(designMat' * designMat) * designMat' * (rangeData - aPriRange)
+   return aPriEst .+ deltaPos
+end
