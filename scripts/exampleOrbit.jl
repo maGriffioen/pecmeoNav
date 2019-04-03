@@ -1,4 +1,4 @@
-using Plots, ProgressMeter, LinearAlgebra
+using Plots, ProgressMeter, LinearAlgebra, Random
 include("../src/NaviSimu_adder.jl")
 using Main.NaviSimu
 
@@ -15,7 +15,7 @@ function distances(refPoint, pointVector)
    return distVec
 end
 
-function kinematicIter(aPriEst_c, phaseData)
+function kinematicIter_old(aPriEst_c, rangeData, phaseData)
 
    epochs = size(phaseLens, 1)
    sats = size(phaseLens, 2)
@@ -41,6 +41,53 @@ function kinematicIter(aPriEst_c, phaseData)
    global curr_error = (reshape(phaseLens', iter[end] * sats) - modelRange)
    correction = pinv(designMat' * designMat) * designMat' * (reshape(phaseLens', iter[end] * sats) - modelRange)
    correction = pinv(designMat' * designMat) * designMat' * curr_error
+return correction
+
+end
+function kinematicIter(aPriEst_c, rangeData, phaseData)
+
+   epochs = size(phaseLens, 1)
+   sats = size(phaseLens, 2)
+   nbias = sats
+   global designMat = hcat(zeros(epochs * sats*2, epochs * 4), zeros(epochs*sats*2, nbias))
+   measurements = []
+   model = []
+   weightMatrix = zeros(epochs*sats*2, epochs*sats*2)
+   rowIter = 1
+   aPriBias = aPriEst_c[epochs*4+1:end]
+
+   #Loop over all epochs
+   for e in 1:epochs
+      designMat[rowIter:rowIter + 2*sats-1, 4*e] = ones(2*sats)   #1s for time
+      gpspos_e = gpsPositionData(e) #navigation constellation positions
+      apri = aPriEst_c[4*e-3:4*e]   #per-epoch apriori estimation
+      #Loop over measurements / satellites
+      for s in 1:sats
+         navsatpos = gpspos_e[s]
+         posdiff = apri[1:3].- collect(navsatpos)
+         r = norm(posdiff) #Geometric range
+         designMat[rowIter, 4*e-3:4*e-1] = posdiff/r
+         #designMat[rowIter, epochs*4+1:end] = -ones(32)
+         designMat[rowIter, epochs*4+s] = -1
+         designMat[rowIter+1, 4*e-3:4*e-1] = posdiff/r
+
+         weightMatrix[rowIter, rowIter] = 1e3      #Weight for phase m.
+         weightMatrix[rowIter+1, rowIter+1] = 1    #Weight for code m.
+
+         append!(measurements, [phaseData[e, s], rangeData[e, s]])
+         m_pr = r + apri[4]               #model for pseudo range
+         m_ph = r + apri[4] - aPriBias[s] #model for phase
+         append!(model, [m_ph, m_pr])
+
+         rowIter += 2
+      end
+   end
+
+   # global curr_error = (reshape(phaseLens', iter[end] * sats) - modelRange)
+   # correction = pinv(designMat' * designMat) * designMat' * (reshape(phaseLens', iter[end] * sats) - modelRange)
+   # correction = pinv(designMat' * designMat) * designMat' * curr_error
+   global curr_error = measurements-model
+   correction = inv(designMat' *weightMatrix* designMat) * designMat' *weightMatrix* (measurements - model)
 return correction
 
 end
@@ -88,34 +135,37 @@ for ti in iter
 
 end
 
+Random.seed!(1)
+
 #Convert code and phase measurements to ranges and phase lengths (convert to meters)
 freq = 1575.42e6
 waveLen = lightConst / freq
 pseudoRanges = codeSig * lightConst
 pseudoRanges += randn(size(pseudoRanges)) * 1   #1m normal errors
 phaseLens = phaseSig * waveLen
-phaseLens += randn(size(phaseLens)) *1e-3 *0     #1mm normal errors
+phaseLens += randn(size(phaseLens)) *1e-2       #1mm normal errors
 
 #Perform point position estimation and compare position error (magnitude seems to be 1e-9)
-ppesti = [pointPosition(pseudoRanges[i,:], gpsPositionData(i); niter=3) for i in iter]
+ppesti = [pointPosition(pseudoRanges[i,:], gpsPositionData(i); niter=5) for i in iter]
 ppPosErrors = [norm(trueIss[i] .- ppesti[i][1:3]) for i in iter]
 
 
 #Perform kinematic position estimation
 apriPosTime = reshape(hcat(map(x-> collect(ppesti[x]), iter)...), 4*96, 1)
-apriBias = (pseudoRanges[1,:] - phaseLens[1,:]) .* 0 .+ 1e7 * waveLen
+apriBias = (pseudoRanges[1,:] - phaseLens[1,:])
 apriEst = vcat(apriPosTime, apriBias)
 
 kinEstim = apriEst
 corrections = []
 
-@progress for i in 1:2
-   corr = kinematicIter(kinEstim, phaseLens)
+@progress for i in 1:3
+      #weights, singulariteit
+   corr = kinematicIter(kinEstim, pseudoRanges,  phaseLens)
    append!(corrections, norm(corr))
    global kinEstim += corr
 end
 kinPosErrors = [norm(trueIss[i] .- kinEstim[4*i-3:4*i-1]) for i in iter]
 
 
-acc1 = sum(ppPosErrors) / length(ppPosErrors)
+acc1 = sum(ppPosErrors) / length(ppPosErrors)      #pdop * normal error
 acc2 = sum(kinPosErrors) / length(kinPosErrors)
