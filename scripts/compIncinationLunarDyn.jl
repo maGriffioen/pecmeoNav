@@ -29,7 +29,7 @@ pecmeo4 = createCircPecmeo(26.4e6, (3, 3, 3), earth,
     initialOrbitShift=(5.372554642808982, 2.5348806135682063, 0.7211160718288704),
     equatorialRotation = 0*pi/8,
     inclination = 0.0651384236528878)
-#Pecmeo after improved optimization run with worse results :/
+#Pecmeo of 3x2 satellites
 pecmeo5 = createCircPecmeo(26.4e6, (2, 2, 2), earth,
     (2.5891201128936614, 2.496350075955589, 0.6181176114714648);
     initialOrbitShift = (3.2100811591091225, 4.798965601931746, 0.5712986167177687),

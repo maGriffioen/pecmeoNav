@@ -38,9 +38,12 @@ export
 
     #io/*
     openOrbitData,
-    plotConstellation,
-    plotConstellationConnections,
-    animateConstellation
+    # plotConstellation,
+    # plotConstellationConnections,
+    # animateConstellation
+
+
+    Tup3d
 
 Tup3d = Tuple{Float64, Float64, Float64}
 
