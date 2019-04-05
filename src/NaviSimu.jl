@@ -29,6 +29,9 @@ export
     findNavGDOP,
     findNavPDOP,
     pointPosition,
+    sequentialPointPosition,
+    kinematicEstimation,
+
 
     #naviSimu.jl
     instaSignal,
