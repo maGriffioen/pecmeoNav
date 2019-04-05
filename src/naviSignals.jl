@@ -36,8 +36,8 @@ function instaSignal(recPos::Tup3d, transPos::Tup3d, time::Number)
 
         phase = phaseRe - phaseTr #+ N + error
     else
-        signalTravelTime = 0.0
-        phase = 0.0
+        signalTravelTime = NaN64
+        phase = NaN64
     end
     return (code = signalTravelTime, phase = phase, los = los)
 end

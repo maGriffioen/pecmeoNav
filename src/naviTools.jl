@@ -133,6 +133,14 @@ function pointPosition(ranges, navSats; niter = 10)
    return Tuple(esti)
 end
 
+function sequentialPointPosition(epochTimes, navigationConstellation::KeplerConstellation, pseudoRanges, availability; niter = 10)
+    n_epochs = length(epochTimes)
+    navCon = navigationConstellation
+    return [pointPosition(pseudoRanges[epoch, availability[epoch, :]],
+                position(propagateKeplerOrbit(gpsKepler, timevec[epoch]))[availability[epoch, :]]; niter=niter) for epoch in 1:n_epochs]
+end
+
+
 
 function pointPositionIteration(aPriEst, rangeData, navconPos)
    nNavsat = length(navconPos)
