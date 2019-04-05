@@ -35,7 +35,6 @@ export
 
     #io/*
     openOrbitData,
-    gpsKepler,
     plotConstellation,
     plotConstellationConnections,
     animateConstellation
