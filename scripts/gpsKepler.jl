@@ -1,3 +1,12 @@
+# Kepler constellation of GPS orbtis
+# Taken from:
+# GNSS Satellite Orbits
+# Lecture notes for 30550
+# Anna B.O. Jensen
+# aboj@space.dtu.dk
+# Rev. August 28, 2010
+
+
 gpsKepler = KeplerConstellation([
     KeplerOrbit(26559.8e3, 0.00, deg2rad(55.0), deg2rad(272.85 ), 0.0, deg2rad(11.68 ), earth),     #A3
     KeplerOrbit(26559.8e3, 0.00, deg2rad(55.0), deg2rad(272.85 ), 0.0, deg2rad(41.81 ), earth),     #A4
