@@ -26,3 +26,14 @@ function bodyPosition(bodyName::String, time::Number)
 
 end
 bodyPosition(body::Body, time::Number) = bodyPosition(body.name, time)
+
+function globalState(body::Body, time)
+    if (body.name == "Earth")
+        state = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    elseif (body.name == "Moon")
+        state = globalState(propagateKeplerOrbit(lunarOrbit, time))
+    else
+        error("Body is unknown")
+    end
+    return state
+end

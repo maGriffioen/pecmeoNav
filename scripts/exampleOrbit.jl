@@ -12,13 +12,26 @@ include("gpsKepler.jl")
 
 
 
-
 #Example orbit / data from mission geometfry and orbit design
 #   Intl Space Station
 mu = 398600.441e9
 iss = KeplerOrbit(6787746.891, 0.000731104,
     deg2rad(51.68714486), deg2rad(127.5486706),
     deg2rad(74.21987137), deg2rad(24.10027677), earth)
+moonSat = KeplerOrbit(moon.radius + 100e3, 0.0,
+    deg2rad(90), 0.0, 0.0, 0.0, moon)
+#Pecmeo after optimization run
+pecmeo_333 = createCircPecmeo(26.4e6, (3, 3, 3), earth,
+    (5.372554642808982, 2.5348806135682063, 0.7211160718288704);
+    initialOrbitShift=(5.372554642808982, 2.5348806135682063, 0.7211160718288704),
+    equatorialRotation = 0*pi/8,
+    inclination = 0.0651384236528878)
+#Pecmeo of 3x2 satellites
+pecmeo_222 = createCircPecmeo(26.4e6, (2, 2, 2), earth,
+    (2.5891201128936614, 2.496350075955589, 0.6181176114714648);
+    initialOrbitShift = (3.2100811591091225, 4.798965601931746, 0.5712986167177687),
+    equatorialRotation = 0.059619646441608075,
+    inclination = 0.16112265271507054)
 
 
 # gpsfile = "data/cod20000.eph"
@@ -34,20 +47,23 @@ timestep = 20    #seconds
 timevec = ((1:nepochs).-1) * timestep
 
 ### Set up constellation and measurement storage ###
-navcon = gpsKepler
-nsats = size(gpsKepler) #Total number of satellites in the navigation constellation
+navcon = pecmeo_333
+receiverOrbit = lunarOrbit
+nsats = size(navcon) #Total number of satellites in the navigation constellation
 codeSig = Array{Float64}(undef, nepochs, nsats)    #Per-epoch, per-prn code measurements
 phaseSig = Array{Float64}(undef, nepochs, nsats)   #Per-epoch, per-prn phase measurements
 availability = BitArray(undef, nepochs, nsats)     #Per-epoch, per-prn availability boolean
 
 ### Real satellite positon ###
-trueIss = [position(propagateKeplerOrbit(iss, t)) for t in timevec]
-pdop = [findNavPDOP(trueIss[epoch], position(propagateKeplerOrbit(gpsKepler, timevec[epoch]))) for epoch in 1:nepochs]
+truePositions = [globalPosition(propagateKeplerOrbit(receiverOrbit, t)) for t in timevec]
+pdop = [findNavPDOP(truePositions[epoch], globalPosition(propagateKeplerOrbit(navcon, timevec[epoch]))) for epoch in 1:nepochs]
+gdop = [findNavGDOP(truePositions[epoch], globalPosition(propagateKeplerOrbit(navcon, timevec[epoch]))) for epoch in 1:nepochs]
+
 
 ### Generation of measurements ###
 for epoch in 1:nepochs
-   gpsPos = position(propagateKeplerOrbit(gpsKepler, timevec[epoch]))        #Constellation positions
-   curSignals = instaSignal(trueIss[epoch], gpsPos, timevec[epoch])
+   conPos = globalPosition(propagateKeplerOrbit(navcon, timevec[epoch]))        #Constellation positions
+   curSignals = instaSignal(truePositions[epoch], conPos, timevec[epoch])
 
    #Store data
    codeSig[epoch, :] = curSignals.code
@@ -63,18 +79,18 @@ waveLen = lightConst / freq
 pseudoRanges = codeSig * lightConst
 pseudoRanges += randn(size(pseudoRanges)) .* (pseudoRanges.!=0.0) * 1   #1m normal errors
 phaseLens = phaseSig * waveLen
-phaseLens += randn(size(phaseLens)) .* (phaseLens.!=0.0) *1e-3       #1mm normal errors
+phaseLens += randn(size(phaseLens)) .* (phaseLens.!=0.0) *1e-3      #1mm normal errors
 
 ### Point position estimation ###
-ppesti = sequentialPointPosition(timevec, navcon, pseudoRanges, availability; maxIter = 5)
-ppPosErrors = [norm(trueIss[i] .- ppesti[i][1:3]) for i in 1:nepochs]
+ppesti = sequentialPointPosition(timevec, navcon, pseudoRanges, availability; maxIter = 100)
+ppPosErrors = [norm(truePositions[i] .- ppesti[i][1:3]) for i in 1:nepochs]
 
 ### Kinematic estimation
-kinEstim = kinematicEstimation(navcon, timevec, pseudoRanges, phaseLens, availability)
+@time kinEstim = kinematicEstimation(navcon, timevec, pseudoRanges, phaseLens, availability; maxIter_pp=100, maxIter = 100)
 kinPosTime = kinEstim.positionTimeEstimation
 kinBias = kinEstim.biasEstimation
 
-kinPosErrors = [norm(trueIss[e] .- kinPosTime[e][1:3]) for e in 1:nepochs]
+kinPosErrors = [norm(truePositions[e] .- kinPosTime[e][1:3]) for e in 1:nepochs]
 
 
 ### Average 3d position accuracies for estimation methods

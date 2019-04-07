@@ -18,7 +18,7 @@ function findPPDesignMatrix(
     return mat_A
 end
 findPPDesignMatrix( refPoint::Tuple{Number, Number, Number},
-     constel::KeplerConstellation ) = findPPDesignMatrix(refPoint, position(constel))
+     constel::KeplerConstellation ) = findPPDesignMatrix(refPoint, globalPosition(constel))
 
 
  # Evaluate Covariance matrix of the Navigation system
@@ -30,7 +30,7 @@ findPPDesignMatrix( refPoint::Tuple{Number, Number, Number},
      return inv(mat_A' * mat_A)
  end
  findNavCovmat( refPoint::Tuple{Number, Number, Number},
-      constel::KeplerConstellation ) = findNavCovmat(refPoint, position(constel))
+      constel::KeplerConstellation ) = findNavCovmat(refPoint, globalPosition(constel))
 
 # # Evaluate Covariance matrix of the Navigation system
 # # For a reference point and a constellation (in given position)\
@@ -73,7 +73,7 @@ function findNavGDOP(
     return GDOP
 end
 findNavGDOP(refPoint::Tuple{Number, Number, Number},
-    constel::KeplerConstellation) = findNavGDOP(refPoint, position(constel))
+    constel::KeplerConstellation) = findNavGDOP(refPoint, globalPosition(constel))
 
 function findNavPDOP(
     refPoint::Tuple{Number, Number, Number},
@@ -89,7 +89,7 @@ function findNavPDOP(
     return PDOP
 end
 findNavPDOP(refPoint::Tuple{Number, Number, Number},
-    constel::KeplerConstellation) = findNavGDOP(refPoint, position(constel))
+    constel::KeplerConstellation) = findNavGDOP(refPoint, globalPosition(constel))
 
 function hasLineOfSight(receiverLocation::Tuple{Float64, Float64, Float64},
     transmitterLocation::Tuple{Float64, Float64, Float64},
@@ -158,19 +158,19 @@ function sequentialPointPosition(epochTimes, navigationConstellation::KeplerCons
     n_epochs = length(epochTimes)
     navCon = navigationConstellation
     return [pointPosition(pseudoRanges[epoch, availability[epoch, :]],
-                position(propagateKeplerOrbit(navCon, epochTimes[epoch]))[availability[epoch, :]];
+                globalPosition(propagateKeplerOrbit(navCon, epochTimes[epoch]))[availability[epoch, :]];
                     maxIter=maxIter, correctionLimit=correctionLimit)
                 for epoch in 1:n_epochs]
 end
 
 # Perform the entire kinematic estmiation
 function kinematicEstimation(navCon::KeplerConstellation, epochTimes,
-   rangeData, phaseData, availability; maxIter::Number = 5, correctionLimit::Number = 1e-8,
+   rangeData, phaseData, availability; maxIter::Number = 5, correctionLimit::Number = 1e-8, maxIter_pp = 20,
    codeWeight = 1, phaseWeight = 1e6)
 
    n_epochs = length(epochTimes)    #Number of epochs
    # Create apriori position and clock error estimation through point positioning
-   global ppesti = sequentialPointPosition(epochTimes, navCon, rangeData, availability; maxIter = 5, correctionLimit = 1e-3)
+   global ppesti = sequentialPointPosition(epochTimes, navCon, rangeData, availability; maxIter=maxIter_pp, correctionLimit = 1e-3)
    global apriPosTime = vcat(map(x-> collect(ppesti[x]), 1:n_epochs)...)  #apriori position and time are those from point positioning
 
    kinEstim = apriPosTime  #Dont add bias estimation -> The kinematic iterator adds those dynamically when needed
@@ -252,7 +252,7 @@ function kinematicIter(navCon::KeplerConstellation, epochTimes,
    rowIter = 1
    #Loop over all epochs
    for epoch in 1:n_epochs
-      gpspos_e = position(propagateKeplerOrbit(navCon, epochTimes[epoch])) #navigation constellation positions
+      gpspos_e = globalPosition(propagateKeplerOrbit(navCon, epochTimes[epoch])) #navigation constellation positions
       apri_e = aPriEst_c[4*epoch-3:4*epoch]   #apriori pos en t estimation for this epoch
 
       #Loop over available satellites
@@ -289,7 +289,10 @@ function kinematicIter(navCon::KeplerConstellation, epochTimes,
    # Current error between measurements and model
    curr_error = measurements-model
    # Weighted least squares correction to estimation vector
-   correction = inv(designMat' *weightMatrix* designMat) * designMat' *weightMatrix* curr_error
+   # correction = inv(designMat' *weightMatrix* designMat) * designMat' *weightMatrix* curr_error
+   correction = (designMat' *weightMatrix* designMat) \ (designMat' *weightMatrix* curr_error)
+   # ff = svd(designMat' *weightMatrix* designMat)
+   # correction = (ff.V * inv(diagm(0=> ff.S)) * ff.U') * (designMat' *weightMatrix* curr_error)
 
    return (correction = correction, estimation = aPriEst+correction)
 end

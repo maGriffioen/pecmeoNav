@@ -42,12 +42,12 @@ phaseSig = Array{Float64}(undef, nepochs, nsats)   #Per-epoch, per-prn phase mea
 availability = BitArray(undef, nepochs, nsats)     #Per-epoch, per-prn availability boolean
 
 ### Real satellite positon ###
-truePositions = [position(propagateKeplerOrbit(receiverOrbit, t)) for t in timevec]
-pdop = [findNavPDOP(truePositions[epoch], position(propagateKeplerOrbit(navcon, timevec[epoch]))) for epoch in 1:nepochs]
+truePositions = [globalPosition(propagateKeplerOrbit(receiverOrbit, t)) for t in timevec]
+pdop = [findNavPDOP(truePositions[epoch], globalPosition(propagateKeplerOrbit(navcon, timevec[epoch]))) for epoch in 1:nepochs]
 
 ### Generation of measurements ###
 for epoch in 1:nepochs
-   conPos = position(propagateKeplerOrbit(navcon, timevec[epoch]))        #Constellation positions
+   conPos = globalPosition(propagateKeplerOrbit(navcon, timevec[epoch]))        #Constellation positions
    curSignals = instaSignal(truePositions[epoch], conPos, timevec[epoch])
 
    #Store data

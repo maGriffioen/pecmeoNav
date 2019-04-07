@@ -7,6 +7,7 @@ export
     Tup3d,
     #keplerOrbits.jl
     Body,
+    Orbit,
     KeplerOrbit,
     CartesianOrbit,
     CartesianState,
@@ -15,6 +16,10 @@ export
     keplerToCartesian,
     orbitalPeriod,
     createCircPecmeo,
+    localPosition,
+    globalPosition,
+    localState,
+    globalState,
 
     #bodies.jl
     earth,
