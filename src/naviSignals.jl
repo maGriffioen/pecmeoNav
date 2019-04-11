@@ -18,7 +18,7 @@ end
 
 
 function instaSignal(recPos::Tup3d, transPos::Tup3d, time::Number)
-    los = hasLineOfSightEarth(recPos, transPos)
+    los = hasLineOfSightEarthMoon(recPos, transPos, time)
     if los
         #Neglect doppler shifting and relativistic effects
         freq = 1575.42e6

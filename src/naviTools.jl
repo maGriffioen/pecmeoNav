@@ -123,6 +123,10 @@ hasLineOfSight(receiverLoc::Tuple{Float64, Float64, Float64},
 
 hasLineOfSightEarth(receiverLoc, transmitterLoc) =
     hasLineOfSight(receiverLoc, transmitterLoc, bodyPosition(earth.name, 0), earth.radius)
+hasLineOfSightMoon(receiverLoc, transmitterLoc, time) =
+    hasLineOfSight(receiverLoc, transmitterLoc, bodyPosition(moon.name, time), moon.radius)
+hasLineOfSightEarthMoon(receiverLoc, transmitterLoc, time) =
+    hasLineOfSightEarth(receiverLoc, transmitterLoc) .* hasLineOfSightMoon(receiverLoc, transmitterLoc, time)
 
 # Perform a single point position
 function pointPosition(ranges, navSats; maxIter = 10, correctionLimit = 1e-8)
@@ -158,7 +162,7 @@ function sequentialPointPosition(epochTimes, navigationConstellation::KeplerCons
     n_epochs = length(epochTimes)
     navCon = navigationConstellation
     return [pointPosition(pseudoRanges[epoch, availability[epoch, :]],
-                globalPosition(propagateKeplerOrbit(navCon, epochTimes[epoch]))[availability[epoch, :]];
+                globalPosition(navCon, epochTimes[epoch])[availability[epoch, :]];
                     maxIter=maxIter, correctionLimit=correctionLimit)
                 for epoch in 1:n_epochs]
 end
@@ -252,7 +256,7 @@ function kinematicIter(navCon::KeplerConstellation, epochTimes,
    rowIter = 1
    #Loop over all epochs
    for epoch in 1:n_epochs
-      gpspos_e = globalPosition(propagateKeplerOrbit(navCon, epochTimes[epoch])) #navigation constellation positions
+      gpspos_e = globalPosition(navCon, epochTimes[epoch]) #navigation constellation positions
       apri_e = aPriEst_c[4*epoch-3:4*epoch]   #apriori pos en t estimation for this epoch
 
       #Loop over available satellites

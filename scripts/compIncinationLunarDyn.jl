@@ -3,7 +3,7 @@
 #
 using Plots, LinearAlgebra
 
-include("../src/NaviSimu.jl")
+include("../src/NaviSimu_adder.jl")
 using Main.NaviSimu
 
 n = 3
@@ -37,7 +37,7 @@ pecmeo_222 = createCircPecmeo(26.4e6, (2, 2, 2), earth,
     inclination = 0.16112265271507054)
 
 
-dt = 100
+dt = 50
 opc = orbitalPeriod(pecmeo1[1])
 oc = 1:trunc(Int, opc/dt)
 opm = orbitalPeriod(lunarOrbit)
@@ -58,4 +58,4 @@ p1 = plot(timevec_pecmeo[oc], [gdop_pecmeo1_nd[oc] gdop_pecmeo2_nd[oc]], label=[
 p2 = plot(timevec_pecmeo, [gdop_pecmeo2_nd gdop_pecmeo2_id], label=["Static Moon", "Moving Moon"], xlabel="Time [s]", ylabel="GDOP", title="T of moon, comparison of moving vs static moon")
 p3 = plot(timevec_pecmeo, [gdop_pecmeo2_nd gdop_pecmeo2_id gdop_pecmeo3_id], label=["Static Moon", "Moving Moon, equatorial", "Moving Moon, lunar"], xlabel="Time [s]", ylabel="GDOP", title="T of moon, comparison of orbital planes")
 p4 = plot(timevec_pecmeo, [gdop_pecmeo2_nd gdop_pecmeo2_id gdop_pecmeo333_id], label=["Static Moon", "Moving Moon, equatorial", "Moving Moon, optimized"], xlabel="Time [s]", ylabel="GDOP", title="T of moon, comparison of constellations")
-p5 = plot(timevec_pecmeo, [gdop_pecmeo333_id gdop_pecmeo222_id], label=["Optimized, 3x3", "Optimized, 3x2"], xlabel="Time [s]", ylabel="GDOP", title="T of moon, comparison of constellations")
+p5 = plot(timevec_pecmeo, [gdop_pecmeo333_id gdop_pecmeo222_id], label=["Optimized, 3-3-3", "Optimized, 2-2-2"], xlabel="Time [s]", ylabel="GDOP", title="T of moon, comparison of constellations")
