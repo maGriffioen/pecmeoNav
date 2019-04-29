@@ -96,20 +96,20 @@ globalPosition(ko::KeplerOrbit; time::Number=0.0) = globalPosition(keplerToCarte
 globalPosition(kc::KeplerConstellation; time::Number=0.0) = [globalPosition(orbit; time=time) for orbit in kc.orbits]
 globalPosition(orbit::Orbit, time::Number) = globalPosition(propagateKeplerOrbit(orbit, time); time=time)
 
-localState(co::CartesianOrbit; time::Number=0.0) = [x, y, z, vx, vy, vz]
+localState(co::CartesianOrbit; time::Number=0.0) = [co.x, co.y, co.z, co.vx, co.vy, co.vz]
 localState(ko::KeplerOrbit; time::Number=0.0) = localState(keplerToCartesian(ko); time=time)
 localState(kc::KeplerConstellation; time::Number=0.0) = [localState(orbit; time=time) for orbit in kc.orbits]
 localState(orbit::Orbit, time::Number) = localState(propagateKeplerOrbit(orbit, time); time=time)
 
-globalState(co::CartesianOrbit; time::Number=0.0) = [x, y, z, vx, vy, vz] .+ globalState(co.cbody, time)
+globalState(co::CartesianOrbit; time::Number=0.0) = [co.x, co.y, co.z, co.vx, co.vy, co.vz] .+ globalState(co.cbody, time)
 globalState(ko::KeplerOrbit; time::Number=0.0) = globalState(keplerToCartesian(ko); time=time)
 globalState(kc::KeplerConstellation; time::Number=0.0) = [globalState(orbit; time=time) for orbit in kc.orbits]
-globalState(orbit::Orbit, time::Number) = state(propagateKeplerOrbit(orbit, time); time=time)
+globalState(orbit::Orbit, time::Number) = globalState(propagateKeplerOrbit(orbit, time); time=time)
 
 
 #Legacy states
 state(ko::KeplerOrbit; time::Number=0.0) = state(keplerToCartesian(ko))
-state(co::CartesianOrbit; time::Number=0.0) = [x, y, z, vx, vy, vz]
+state(co::CartesianOrbit; time::Number=0.0) = [co.x, co.y, co.z, co.vx, co.vy, co.vz]
 state(kc::KeplerConstellation; time::Number=0.0) = [state(orbit) for orbit in kc.orbits]
 state(orbit, time::Number) = state(propagateKeplerOrbit(orbit, time))
 
