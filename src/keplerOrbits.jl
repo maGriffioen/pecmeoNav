@@ -1,6 +1,8 @@
 # Define body type
 # For the definition of several bodies with data, see bodies.jl
 abstract type Orbit end
+abstract type SingleOrbit <: Orbit end
+abstract type Constellation <: Orbit end
 
 struct Body
     name::String
@@ -11,7 +13,7 @@ Body(; name = "", gravitationalParameter, radius) =
     Body(name, gravitationalParameter, radius)
 
 # Object for Kepler Orbits
-struct KeplerOrbit <: Orbit
+struct KeplerOrbit <: SingleOrbit
     a::Float64      #Semi-major axis
     e::Float64      #Eccentricity
     i::Float64      #Inclination
@@ -24,7 +26,7 @@ Base.copy(ko::KeplerOrbit)=
     KeplerOrbit(ko.a, ko.e, ko.i, ko.raan, ko.aop, ko.tanom, ko.cbody)
 
 # Object for Cartesian orbits (=cartesian state + gravitational parameter)
-struct CartesianOrbit <: Orbit
+struct CartesianOrbit <: SingleOrbit
     x::Float64
     y::Float64
     z::Float64
@@ -40,7 +42,7 @@ Base.copy(co::CartesianOrbit) =
 
 
 # Object for a constellation of kepler orbits
-struct KeplerConstellation <: Orbit
+struct KeplerConstellation <: Constellation
     orbits::Array{KeplerOrbit,1}
 end
 KeplerConstellation() = KeplerConstellation([])
