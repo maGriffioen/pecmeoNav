@@ -3,8 +3,10 @@
 *.jpg
 *.sp3
 *.eph
+*.drawio
 
 /figs
 /tmp
 /papers
 /data
+/diarams
