@@ -15,7 +15,7 @@ pecmeo_333 = createCircPecmeo(26.4e6, (3, 3, 3), earth,
 receiverOrbit = moonSat
 navcon = pecmeo_333
 
-#Find transmitter position and true time during transmission (Light time effect)
+# Find transmitter position and true time during transmission (Light time effect)
 function transmitterFinder(receptionTime::Number, receiverPos::Tup3d, transmitterOrbit::Orbit)
     travelTime = 0.0    #Assume instant signal as first estimate
     correction = 1      #Force loop to start
@@ -35,24 +35,28 @@ function transmitterFinder(receptionTime::Number, receiverPos::Tup3d, transmitte
         correction = receptionTime - transTime - travelTime
         nIter +=1
     end
+    println(nIter)
 
     return (t_true = transTime, pos = transPos, travelTime = travelTime,
         lastCorrection = correction, iterations = nIter)
 end
 
+# ODEs to describe time dilation of satellite with respect to Earth-fixed-rotating clock
 function clockODE(x::Array{<:Number, 1}, t::Number)
     dxdy = zeros(length(x))
     state = globalState(receiverOrbit, t)
     velocity = norm(state[4:6])
     c = lightConst
 
-    dxdy[1] = 1/sqrt(1- (velocity^2 / c^2)) #Local time rate
-    dxdy[2] = dxdy[1] + (1 - 1/sqrt(1- (1925.63^2 / c^2)))  #Clock time rate
+    dxdy[1] = sqrt(1- (velocity^2 / c^2)) #Local time rate
+    dxdy[2] = dxdy[1] * (1/sqrt(1- (1925.63^2 / c^2)))  #Clock time rate
     #x[1] = t',
     #x[2] = t'_c
     return dxdy
 end
 
+# Plain Runge-Kutta 4 integration scheme
+# Integrates from t=0 to t=tspan with dt = stepSize
 function rk4(odefun, tspan, y0, stepSize)
     h = stepSize
     t_curr = 0.0
@@ -234,6 +238,8 @@ function rk4measurementFinder(timeODE::Function, interpolValues::StepRangeLen,
     return (y = y_inter, t = t_inter, dydt = dydt_inter)
 end
 
+# Propagate single RK4 step, based on current time, y vector, dy/dt and step size.
+# Returns new time, y vector and dy/dt
 function rk4Step(odefun, t_curr, y_curr, dydt_curr, stepSize)
     h = stepSize
     k1 = h*dydt_curr
@@ -249,19 +255,20 @@ function rk4Step(odefun, t_curr, y_curr, dydt_curr, stepSize)
 end
 
 
-measurements = 5.0:10.2:1000.0
-results = rk4(clockODE, 1000, [0.0, 0.0], 10)
+measurements = 5.0:100.2:10000.0
+results = rk4(clockODE, 10000, [0.0, 0.0], 10)
 inter = rk4measurementFinder(clockODE, measurements, 0.0, 1.0; interParam=2)
 transmitter = transmitterFinder(inter.t[1], globalPosition(receiverOrbit, inter.t[1]), navcon[1])
+
 
 trueOffset = results.y[1,:]- results.t
 clockOffset= results.y[2,:]- results.t
 
 
-plot(xlabel="Time [hours]", ylabel="Time offset [s]")
+p1 = plot(xlabel="Time [hours]", ylabel="Time offset [s]")
 plot!(results.t / 3600, trueOffset, label="Local time offset")
 plot!(results.t / 3600, clockOffset, label="Clock offset")
 
-plot(xlabel="Time [hours]", ylabel="Time offset [s]")
-plot!(inter.t, inter.y[2, :]-inter.t, label="Time offset from inertial time during measurement")
-plot!(inter.t, inter.y[2,:]-measurements, label="Numerical measurement time error")
+p2 = plot(xlabel="Time [hours]", ylabel="Time offset [s]")
+plot!(inter.t / 3600, inter.y[2, :]-inter.t, label="Time offset from inertial time during measurement")
+plot!(inter.t / 3600, inter.y[2,:]-measurements, label="Numerical measurement time error")
