@@ -129,18 +129,20 @@ hasLineOfSightEarthMoon(receiverLoc, transmitterLoc, time) =
     hasLineOfSightEarth(receiverLoc, transmitterLoc) .* hasLineOfSightMoon(receiverLoc, transmitterLoc, time)
 
 # Perform a single point position
-function pointPosition(ranges, navSats; maxIter = 10, correctionLimit = 1e-8)
-   estimation = [0.0, 0.0, 0.0, 0.0]
-   niter = 0
-   correction = correctionLimit * 10
+function pointPosition(ranges, navSats; maxIter = 10, correctionLimit = 1e-8,
+    aprioriEstimation = [0.0, 0.0, 0.0, 0.0])
 
-   while (niter < maxIter && correction > correctionLimit)
+    estimation = aprioriEstimation
+    niter = 0
+    correction = correctionLimit * 10
+
+    while (niter < maxIter && correction > correctionLimit)
       estimation_new = pointPositionIteration(estimation, ranges, navSats)
       correction = maximum(abs.(estimation_new.-estimation))
       estimation = estimation_new
       niter += 1
-   end
-   return Tuple(estimation)
+    end
+    return Tuple(estimation)
 end
 
 # Perform a single point position estimation iteration
@@ -157,24 +159,43 @@ end
 
 # Perform batch of point position estimations for a single satellite on various epochs
 function sequentialPointPosition(epochTimes, navigationConstellation::KeplerConstellation,
-    pseudoRanges, availability; maxIter = 10, correctionLimit = 1e-8)
+    pseudoRanges, availability; aprioriEstimations = [0.0], maxIter = 10, correctionLimit = 1e-8)
+
 
     n_epochs = length(epochTimes)
+
+    # Check validity of apriori estimations, and create zeros to reset when needed
+    if (aprioriEstimations == [0])
+        aprioriEstimations = zeros(n_epochs, 4)
+
+    elseif (size(aprioriEstimations, 1) != n_epochs
+        || size(aprioriEstimations, 2) != 4)
+
+        print("sequentialPointPosition: Input apriori estimations of size ",
+        size(aprioriEstimations), ", ", (n_epochs, 4), " expected.
+        Zero vector used instead.")
+
+        aprioriEstimations = zeros(n_epochs, 4)
+    end
+
     navCon = navigationConstellation
     return [pointPosition(pseudoRanges[epoch, availability[epoch, :]],
                 globalPosition(navCon, epochTimes[epoch])[availability[epoch, :]];
-                    maxIter=maxIter, correctionLimit=correctionLimit)
+                    maxIter=maxIter, correctionLimit=correctionLimit,
+                    aprioriEstimation = aprioriEstimations[epoch, :])
                 for epoch in 1:n_epochs]
 end
 
 # Perform the entire kinematic estmiation
 function kinematicEstimation(navCon::KeplerConstellation, epochTimes,
-   rangeData, phaseData, availability; maxIter::Number = 5, correctionLimit::Number = 1e-8, maxIter_pp = 20,
+   rangeData, phaseData, availability;
+   ppApriori = [0], maxIter::Number = 5, correctionLimit::Number = 1e-8, maxIter_pp = 20,
    codeWeight = 1, phaseWeight = 1e6)
 
    n_epochs = length(epochTimes)    #Number of epochs
    # Create apriori position and clock error estimation through point positioning
-   global ppesti = sequentialPointPosition(epochTimes, navCon, rangeData, availability; maxIter=maxIter_pp, correctionLimit = 1e-3)
+   global ppesti = sequentialPointPosition(epochTimes, navCon, rangeData, availability;
+    aprioriEstimations = ppApriori, maxIter=maxIter_pp, correctionLimit = 1e-3)
    global apriPosTime = vcat(map(x-> collect(ppesti[x]), 1:n_epochs)...)  #apriori position and time are those from point positioning
 
    kinEstim = apriPosTime  #Dont add bias estimation -> The kinematic iterator adds those dynamically when needed

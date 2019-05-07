@@ -1,4 +1,4 @@
-using Plots, ProgressMeter, LinearAlgebra, Random
+using Plots, ProgressMeter, LinearAlgebra, Random, DoubleFloats
 include("../src/NaviSimu_adder.jl")
 using Main.NaviSimu
 
@@ -9,7 +9,6 @@ include("gpsKepler.jl")
 # include("../src/naviSignals.jl")
 # include("../src/io/plotTools.jl")
 # include("../src/io/gpsData.jl")
-
 
 
 #Example orbit / data from mission geometfry and orbit design
@@ -42,9 +41,10 @@ pecmeo_222 = createCircPecmeo(26.4e6, (2, 2, 2), earth,
 # gps1 = gpsPositionData(1)
 
 ### Set up epochs and time vector ###
-nepochs = 50   #Number of time steps
+nepochs = 51   #Number of time steps
 timestep = 100    #seconds
-timevec = ((1:nepochs).-1) * timestep
+t0 = 0
+timevec = t0 .+ ((1:nepochs).-1) * timestep
 
 ### Set up constellation and measurement storage ###
 navcon = pecmeo_333
@@ -71,7 +71,7 @@ for epoch in 1:nepochs
    availability[epoch, :] = curSignals.avail
 end
 
-# Remove epochs with too few satellites --- This needs to be updated
+# Remove epochs with too few satellites --- TODO: Improve
 satCount = [sum(availability[e, :]) for e in 1:size(availability)[1]]
 usableEpoch = satCount .>4
 nepochs = sum(usableEpoch)
@@ -90,17 +90,19 @@ Random.seed!(1)
 freq = 1575.42e6
 waveLen = lightConst / freq
 pseudoRanges = codeSig * lightConst
-pseudoRanges += randn(size(pseudoRanges)) .* (pseudoRanges.!=0.0) * 1    #1m normal errors
+# pseudoRanges += randn(size(pseudoRanges)) .* (pseudoRanges.!=0.0) * 1 *0   #1m normal errors
 phaseLens = phaseSig * waveLen
-phaseLens += randn(size(phaseLens)) .* (phaseLens.!=0.0) *1e-3       #1mm normal errors
+# phaseLens += randn(size(phaseLens)) .* (phaseLens.!=0.0) *1e-3 *0       #1mm normal errors
 
 ### Point position estimation ###
-ppesti = sequentialPointPosition(timevec, navcon, pseudoRanges, availability; maxIter = 100)
+ppApriori = vcat([vcat([j for j in bodyPosition(moon, timevec[i])], 0.0)' for i in 1:nepochs]...)
+ppesti = sequentialPointPosition(timevec, navcon, pseudoRanges, availability;
+aprioriEstimations = ppApriori, maxIter = 100)
 ppPosErrors = [norm(truePositions[i] .- ppesti[i][1:3]) for i in 1:nepochs]
 
 ### Kinematic estimation
 @time kinEstim = kinematicEstimation(navcon, timevec, pseudoRanges, phaseLens, availability;
-    maxIter_pp=100, maxIter = 100, codeWeight = 1.0, phaseWeight = 1e6)
+    ppApriori = ppApriori, maxIter_pp=100, maxIter = 5, codeWeight = 1.0, phaseWeight = 1e6)
 kinPosTime = kinEstim.positionTimeEstimation
 kinBias = kinEstim.biasEstimation
 
@@ -110,3 +112,5 @@ kinPosErrors = [norm(truePositions[e] .- kinPosTime[e][1:3]) for e in 1:nepochs]
 ### Average 3d position accuracies for estimation methods
 acc1 = sum(ppPosErrors) / length(ppPosErrors)      #pdop * normal error
 acc2 = sum(kinPosErrors) / length(kinPosErrors)
+print("\n PointPosi error: \t", acc1)
+print("\n Kinematic error: \t", acc2)
