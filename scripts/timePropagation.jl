@@ -24,7 +24,7 @@ function transmitterFinder(receptionTime::Number, receiverPos::Tup3d, transmitte
 
     nIter = 0   #Iteration counter
     # Iterate while no convergence of smaller than xx seconds is reached
-    while (abs(correction) > 1e-15)   #TODO: Tweak value for balance between stability and numerical accuracy
+    while (abs(correction) > 1e-12)   #TODO: Tweak value for balance between stability and numerical accuracy
         # Calculate new transmitter position & time
         transTime = receptionTime - travelTime      #Time of transmission of signal
         transPos = globalPosition(transmitterOrbit, transTime)  #Position of transmitting satellite
@@ -34,10 +34,11 @@ function transmitterFinder(receptionTime::Number, receiverPos::Tup3d, transmitte
         # Find applied correction for the decision if convergence has been reached
         correction = receptionTime - transTime - travelTime
         nIter +=1
+        # println(nIter," ", correction)
     end
-    println(nIter)
+    # println(nIter)
 
-    return (t_true = transTime, pos = transPos, travelTime = travelTime,
+    return (transmissionTime = transTime, pos = transPos, travelTime = travelTime,
         lastCorrection = correction, iterations = nIter)
 end
 
@@ -64,9 +65,9 @@ function rk4(odefun, tspan, y0, stepSize)
     dydt_curr = odefun(y_curr, t_curr)
 
     #Create Empty data vectors
-    y = []  #State vector, concentrated vertically to be 1D
-    dydt = []
-    t = []  #Time vector
+    y = Array{Float64}(undef, 0)  #State vector, concentrated vertically to be 1D
+    dydt = Array{Float64}(undef, 0)
+    t = Array{Float64}(undef, 0)  #Time vector
 
     #Add initial conditions
     append!(y, y_curr)
@@ -114,9 +115,9 @@ function rk4Targets(odefun, targetTimes, y0, t0, integStepSize)
     sort!(targetTimes)
 
     #Create Empty data vectors
-    y = []  #State vector, concentrated vertically to be 1D
-    dydt = []
-    t = []  #Time vector
+    y = Array{Float64}(undef, 0)  #State vector, concentrated vertically to be 1D
+    dydt = Array{Float64}(undef, 0)
+    t = Array{Float64}(undef, 0)  #Time vector
 
     #Add initial conditions
 
@@ -170,15 +171,15 @@ function rk4measurementFinder(timeODE::Function, interpolValues::StepRangeLen,
     interpolVal_tofind = interpolValues[interpolInt_curr]
 
     #Create Empty data vectors
-    t = []  #Time vector
-    y = [] #State vector, concentrated vertically to be 1D
-    dydt = [] #State derivative
+    t = Array{Float64}(undef, 0)  #Time vector
+    y = Array{Float64}(undef, 0) #State vector, concentrated vertically to be 1D
+    dydt = Array{Float64}(undef, 0) #State derivative
 
 
     #Data vector for interpolated values
-    t_inter = []
-    y_inter = []
-    dydt_inter = []
+    t_inter = Array{Float64}(undef, 0)
+    y_inter = Array{Float64}(undef, 0)
+    dydt_inter = Array{Float64}(undef, 0)
 
     #Perform integration steps until time is beyond timespan
     while t_curr < interpolValues[end] && interpolInt_curr <= length(interpolValues)
@@ -254,12 +255,81 @@ function rk4Step(odefun, t_curr, y_curr, dydt_curr, stepSize)
     return (y=y, t=t, dydt=dydt)
 end
 
+# Simulate the measurements sequentially
+function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiverOrbit::Orbit, navcon::Orbit;
+    writeToFile = false, outputFile = "")
+    nsats = size(navcon)
+    codes = Array{Float64, 1}(undef, nsats)
+    phases = Array{Float64, 1}(undef, nsats)
+    avail = BitArray(undef, nsats)
+
+    #Loop over navigation satellites for this epoch
+    for prn in 1:nsats
+        receiverPosition = globalPosition(receiverOrbit, inertialTime)
+        transmitter = transmitterFinder(inertialTime, receiverPosition, navcon[prn])
+
+        connection = true
+
+        # Determine if in shadow of Earth or Moon
+        # Check the line of sight both during reception and transmission. Assume no LOS when satellites are shadowed by body during either time.
+        losEarly = NaviSimu.hasLineOfSightEarthMoon(receiverPosition, transmitter.pos, transmitter.transmissionTime)
+        losLate = NaviSimu.hasLineOfSightEarthMoon(receiverPosition, transmitter.pos, inertialTime)
+        los = (losEarly && losLate)
+
+        # Check if satellites are connected and within line of sight
+        available = los && connection
+
+        avail[prn] = available
+        if (available)
+            #Simulate Code measurement
+            measurementError = 0.0  # Error within receiver system, dependent on SNR
+                # Neglecting transmitter clock error and relativistic effect -> will be largely recovered
+            codes[prn] = (receiverTime - transmitter.transmissionTime) * lightConst + measurementError
+
+            #Simulate Phase measurement
+            phases[prn] = 0.0
+        else
+            # No measurement taken
+            codes[prn] = NaN64
+            phases[prn] = NaN64
+        end
+    end
+    return (code = codes, phase = phases, avail = avail)
+end
+
+function simulateMeasurements(inertialTime::Array{<:Number}, receiverTime::Array{<:Number}, receiverOrbit::Orbit, navcon::Orbit)
+    #Raise error if number of measurements is not clear
+    if (length(inertialTime) != length(receiverTime))
+        error("simulateMeasurements: Number of true times not equal to number of receiver times")
+    end
+
+    nepochs = length(inertialTime)     # Number of epochs
+    nsats = size(navcon) #Total number of satellites in the navigation constellation
+    codeObs = Array{Float64}(undef, nepochs, nsats)    #Per-epoch, per-prn code observation
+    phaseObs = Array{Float64}(undef, nepochs, nsats)   #Per-epoch, per-prn phase observation
+    availability = BitArray(undef, nepochs, nsats)     #Per-epoch, per-prn availability boolean
+
+    for epoch = 1:nepochs
+        msrmt = simulateMeasurements(inertialTime[epoch],
+                    receiverTime[epoch],
+                    receiverOrbit, navcon)
+        codeObs[epoch, :] = msrmt.code
+        phaseObs[epoch, :] = msrmt.phase
+        availability[epoch, :] = msrmt.avail
+    end
+
+    return (codeObs = codeObs, phaseObs = phaseObs, availability = availability)
+end
 
 measurements = 5.0:100.2:10000.0
 results = rk4(clockODE, 10000, [0.0, 0.0], 10)
 inter = rk4measurementFinder(clockODE, measurements, 0.0, 1.0; interParam=2)
+trueMeasurementTimes = inter.t  # Inertial times during measurements
+localReceiverMeasurementTimes = inter.y[1, :]   # local time progression during measurements
+receiverClockMeasurementTimes = inter.y[2, :]   # Time on receiver clock during measurements. Includes clock freq correction (and clock errors).
 transmitter = transmitterFinder(inter.t[1], globalPosition(receiverOrbit, inter.t[1]), navcon[1])
-
+singleMeasurement = simulateMeasurements(inter.t[20], inter.y[2, 20], moonSat, pecmeo_333)
+allMeasurements = simulateMeasurements(inter.t, inter.y[2,:], moonSat, pecmeo_333)
 
 trueOffset = results.y[1,:]- results.t
 clockOffset= results.y[2,:]- results.t
