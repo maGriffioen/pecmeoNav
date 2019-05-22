@@ -58,5 +58,6 @@ include("naviTools.jl")
 include("naviSignals.jl")
 include("io/plotTools.jl")
 include("io/gpsData.jl")
+# include("ephemeris.jl")
 
 end
