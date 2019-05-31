@@ -20,17 +20,16 @@ iss = KeplerOrbit(6787746.891, 0.000731104,
 moonSat = KeplerOrbit(moon.radius + 100e3, 0.0,
     deg2rad(0), 0.0, 0.0, 0.0, moon)
 #Pecmeo after optimization run
-pecmeo_333 = createCircPecmeo(26.4e6, (3, 3, 3), earth,
-    (5.372554642808982, 2.5348806135682063, 0.7211160718288704);
-    initialOrbitShift=(5.372554642808982, 2.5348806135682063, 0.7211160718288704),
+pecmeo_333 = createCircPecmeo(26.4e6, (3, 3, 3), earth;
+    initialOrbitShift=(0.0, (2/6)*pi, (2/6)*pi),
     equatorialRotation = 0*pi/8,
-    inclination = 0.0651384236528878)
+    inclination = 0.0)
 #Pecmeo of 3x2 satellites
 pecmeo_222 = createCircPecmeo(26.4e6, (2, 2, 2), earth,
     (2.5891201128936614, 2.496350075955589, 0.6181176114714648);
     initialOrbitShift = (3.2100811591091225, 4.798965601931746, 0.5712986167177687),
     equatorialRotation = 0.059619646441608075,
-    inclination = 0.16112265271507054)
+    inclination = -0.24798)
 
 
 # gpsfile = "data/cod20000.eph"
@@ -41,8 +40,8 @@ pecmeo_222 = createCircPecmeo(26.4e6, (2, 2, 2), earth,
 # gps1 = gpsPositionData(1)
 
 ### Set up epochs and time vector ###
-nepochs = 51   #Number of time steps
-timestep = 100    #seconds
+nepochs = 100   #Number of time steps
+timestep = 30    #seconds
 t0 = 0
 timevec = t0 .+ ((1:nepochs).-1) * timestep
 

@@ -1,17 +1,19 @@
 #Quick numbers from google.
 #Replace with well-sourced numbers!!
-
+#https://nssdc.gsfc.nasa.gov/planetary/factsheet/moonfact.html
+gravConst = 6.674e-11   #m^3 kg^-1 s^-2 Lissauer, de Pater
 earth = Body(
     name = "Earth",
-    gravitationalParameter =3.986004418e14,
-    radius = 6371e3
+    gravitationalParameter =5.9724e24 * gravConst,
+    radius = 6378.1 #Equatorial radius, pessimistic case for shadowing
 )
 moon = Body(
     name = "Moon",
-    gravitationalParameter = 4.9048695e12,
-    radius = 1737e3
+    gravitationalParameter = 0.07346e24 * gravConst,
+    radius = 1738.1e3
 )
-lunarOrbit = KeplerOrbit(384e6, 0.0, deg2rad(23.4 + 5.14), 0.0, 0.0, 0.0, earth)
+#https://ssd.jpl.nasa.gov/?sat_elem
+lunarOrbit = KeplerOrbit(0.3844e9, 0.0554, deg2rad(5.16), deg2rad(318.15), deg2rad(125.08), deg2rad(135.27) , earth)
 lightConst = 3e8
 
 function bodyPosition(bodyName::String, time::Number)

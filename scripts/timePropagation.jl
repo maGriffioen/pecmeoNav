@@ -5,15 +5,16 @@ using Main.NaviSimu
 
 moonSat = KeplerOrbit(moon.radius + 100e3, 0.0,
     deg2rad(0), 0.0, 0.0, 0.0, moon)
-pecmeo_333 = createCircPecmeo(26.4e6, (3, 3, 3), earth,
-    (5.372554642808982, 2.5348806135682063, 0.7211160718288704);
-    initialOrbitShift=(5.372554642808982, 2.5348806135682063, 0.7211160718288704),
+pecmeo32 = createCircPecmeo(26.4e6, (3, 3, 3), earth;
+    initialOrbitShift=(0.0, (2/6)*pi, (2/6)*pi),
     equatorialRotation = 0*pi/8,
-    inclination = 0.0651384236528878)
+    inclination = 0.0)
 
 #Define constellations
 receiverOrbit = moonSat
 navcon = pecmeo_333
+
+
 
 # Find transmitter position and true time during transmission (Light time effect)
 function transmitterFinder(receptionTime::Number, receiverPos::Tup3d, transmitterOrbit::Orbit)
