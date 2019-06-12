@@ -26,19 +26,21 @@ function NaviSimu.globalPosition(ephemeris::KeplerEphemeris, time)
             i+=1
         end
     end
-    println("i= ",i)
+    # println("i= ",i)
     # If time is before first reference, extrapolate back in time
     if (i==0)
         i =1
     end
 
     timeOffset = time - ephemeris.timeReferences[i]
-    println("dt= ", timeOffset)
+    # println("dt= ", timeOffset)
     return globalPosition(ephemeris.orbits[i], timeOffset)
 end
 
+# function NaviSimu.globalPosition(Array{KeplerEphemeris, 1}) = [NaviSimu.globalPosition()]
+
 # Generate a perfect Kepler Ephemeris
-function perfectKeplerEphemeris(times::Array{<:Number}, orbit::Orbit)
+function trueKeplerEphemeris(times::Array{<:Number}, orbit::Orbit)
     return KeplerEphemeris(times, [propagateKeplerOrbit(orbit, t) for t in times])
 end
 

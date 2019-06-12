@@ -158,7 +158,7 @@ function pointPositionIteration(aPriEst, rangeData, navconPos)
 end
 
 # Perform batch of point position estimations for a single satellite on various epochs
-function sequentialPointPosition(epochTimes, navigationConstellation::KeplerConstellation,
+function sequentialPointPosition(epochTimes, navigationEphemeris::Array{<:Ephemeris},
     pseudoRanges, availability; aprioriEstimations = [0.0], maxIter = 10, correctionLimit = 1e-8)
 
 
@@ -178,23 +178,23 @@ function sequentialPointPosition(epochTimes, navigationConstellation::KeplerCons
         aprioriEstimations = zeros(n_epochs, 4)
     end
 
-    navCon = navigationConstellation
+    # navCon = navigationConstellation
     return [pointPosition(pseudoRanges[epoch, availability[epoch, :]],
-                globalPosition(navCon, epochTimes[epoch])[availability[epoch, :]];
+                [globalPosition(navigationEphemeris[i], epochTimes[epoch]) for i in 1:length(navigationEphemeris)][availability[epoch, :]];
                     maxIter=maxIter, correctionLimit=correctionLimit,
                     aprioriEstimation = aprioriEstimations[epoch, :])
                 for epoch in 1:n_epochs]
 end
 
 # Perform the entire kinematic estmiation
-function kinematicEstimation(navCon::KeplerConstellation, epochTimes,
+function kinematicEstimation(navigationEphemeris::Array{<:Ephemeris}, epochTimes,
    rangeData, phaseData, availability;
    ppApriori = [0], maxIter::Number = 5, correctionLimit::Number = 1e-8, maxIter_pp = 20,
    codeWeight = 1, phaseWeight = 1e6)
 
    n_epochs = length(epochTimes)    #Number of epochs
    # Create apriori position and clock error estimation through point positioning
-   global ppesti = sequentialPointPosition(epochTimes, navCon, rangeData, availability;
+   global ppesti = sequentialPointPosition(epochTimes, navigationEphemeris, rangeData, availability;
     aprioriEstimations = ppApriori, maxIter=maxIter_pp, correctionLimit = 1e-3)
    global apriPosTime = vcat(map(x-> collect(ppesti[x]), 1:n_epochs)...)  #apriori position and time are those from point positioning
 
@@ -205,7 +205,7 @@ function kinematicEstimation(navCon::KeplerConstellation, epochTimes,
    # Perform iterate the kinematic estimation
    while (iter < maxIter && correction > correctionLimit)
       # Perform single iteration
-      kinIter = kinematicIter(navCon, epochTimes, kinEstim,
+      kinIter = kinematicIter(navigationEphemeris, epochTimes, kinEstim,
          rangeData, phaseData, availability;
          codeWeight = codeWeight, phaseWeight = phaseWeight)
       kinEstim = kinIter.estimation                   #Apply estimation
@@ -226,7 +226,7 @@ end
 
 
 # Perform a single iteration of kinematic estimation of satellite position, clock errors and bias
-function kinematicIter(navCon::KeplerConstellation, epochTimes,
+function kinematicIter(navigationEphemeris::Array{<:Ephemeris}, epochTimes,
    aPriEst_c::Array{Float64, 1}, rangeData, phaseData, availability;
    codeWeight = 1.0, phaseWeight = 1e6)
 
@@ -277,7 +277,7 @@ function kinematicIter(navCon::KeplerConstellation, epochTimes,
    rowIter = 1
    #Loop over all epochs
    for epoch in 1:n_epochs
-      gpspos_e = globalPosition(navCon, epochTimes[epoch]) #navigation constellation positions
+      gpspos_e = [globalPosition(navigationEphemeris[i], epochTimes[epoch]) for i in 1:length(navigationEphemeris)] #navigation constellation positions
       apri_e = aPriEst_c[4*epoch-3:4*epoch]   #apriori pos en t estimation for this epoch
 
       #Loop over available satellites

@@ -28,6 +28,12 @@ export
     lunarOrbit,
     lightConst,
 
+    # ephemeris.jl
+    Ephemeris,
+    KeplerEphemeris,
+    trueKeplerEphemeris,
+    noisyKeplerEphemeris,
+
     #naviTools.jl
     hasLineOfSightEarth,
     hasLineOfSight,
@@ -40,6 +46,8 @@ export
 
     #naviSimu.jl
     instaSignal,
+
+
 
     #io/*
     openOrbitData,
@@ -54,10 +62,11 @@ Tup3d = Tuple{Float64, Float64, Float64}
 
 include("keplerOrbits.jl")
 include("bodies.jl")
+include("ephemeris.jl")
 include("naviTools.jl")
 include("naviSignals.jl")
 include("io/plotTools.jl")
 include("io/gpsData.jl")
-# include("ephemeris.jl")
+
 
 end
