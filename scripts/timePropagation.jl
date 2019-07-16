@@ -12,7 +12,7 @@ pecmeo32 = createCircPecmeo(26.4e6, (3, 3, 3), earth;
 
 #Define constellations
 receiverOrbit = moonSat
-navcon = pecmeo_333
+navcon = pecmeo32
 
 
 
@@ -256,10 +256,10 @@ function rk4Step(odefun, t_curr, y_curr, dydt_curr, stepSize)
     return (y=y, t=t, dydt=dydt)
 end
 
-# Simulate the measurements sequentially
+# Simulate the measurements at a single epoch
 function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiverOrbit::Orbit, navcon::Orbit;
     writeToFile = false, outputFile = "")
-    nsats = size(navcon)
+    nsats = size(navcon)                        #Navigation constellation size
     codes = Array{Float64, 1}(undef, nsats)
     phases = Array{Float64, 1}(undef, nsats)
     avail = BitArray(undef, nsats)
@@ -295,9 +295,10 @@ function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiv
             phases[prn] = NaN64
         end
     end
-    return (code = codes, phase = phases, avail = avail)
+    return (code = codes, phase = phases, avail = avail, timeStamp = receiverTime)
 end
 
+# Simulate measurements at sequential times
 function simulateMeasurements(inertialTime::Array{<:Number}, receiverTime::Array{<:Number}, receiverOrbit::Orbit, navcon::Orbit)
     #Raise error if number of measurements is not clear
     if (length(inertialTime) != length(receiverTime))
@@ -319,7 +320,7 @@ function simulateMeasurements(inertialTime::Array{<:Number}, receiverTime::Array
         availability[epoch, :] = msrmt.avail
     end
 
-    return (codeObs = codeObs, phaseObs = phaseObs, availability = availability)
+    return (codeObs = codeObs, phaseObs = phaseObs, availability = availability, timeStamp = receiverTime)
 end
 
 measurements = 5.0:100.2:10000.0
@@ -329,8 +330,8 @@ trueMeasurementTimes = inter.t  # Inertial times during measurements
 localReceiverMeasurementTimes = inter.y[1, :]   # local time progression during measurements
 receiverClockMeasurementTimes = inter.y[2, :]   # Time on receiver clock during measurements. Includes clock freq correction (and clock errors).
 transmitter = transmitterFinder(inter.t[1], globalPosition(receiverOrbit, inter.t[1]), navcon[1])
-singleMeasurement = simulateMeasurements(inter.t[20], inter.y[2, 20], moonSat, pecmeo_333)
-allMeasurements = simulateMeasurements(inter.t, inter.y[2,:], moonSat, pecmeo_333)
+singleMeasurement = simulateMeasurements(inter.t[20], inter.y[2, 20], moonSat, navcon)
+allMeasurements = simulateMeasurements(inter.t, inter.y[2,:], moonSat, navcon)
 
 trueOffset = results.y[1,:]- results.t
 clockOffset= results.y[2,:]- results.t
@@ -343,3 +344,23 @@ plot!(results.t / 3600, clockOffset, label="Clock offset")
 p2 = plot(xlabel="Time [hours]", ylabel="Time offset [s]")
 plot!(inter.t / 3600, inter.y[2, :]-inter.t, label="Time offset from inertial time during measurement")
 plot!(inter.t / 3600, inter.y[2,:]-measurements, label="Numerical measurement time error")
+
+
+
+# Find true satellite positions
+correct_positions = [globalPosition(moonSat, trueMeasurementTimes[i]) for i in 1:length(measurements)]
+
+# Example position estimation
+example_navconEphemeres = [trueKeplerEphemeris([0, 7200, 14400], navcon[i]) for i in 1:size(navcon)]
+example_measurementEpochs = allMeasurements.timeStamp #.-  1.3297363214692226
+example_pseudoRanges = allMeasurements.codeObs
+example_availability = allMeasurements.availability
+ppApriori = vcat([vcat([j for j in bodyPosition(moon, allMeasurements.timeStamp[i])], 0.0)' for i in 1:length(measurements)]...)
+ppesti = sequentialPointPosition(example_measurementEpochs, example_navconEphemeres, example_pseudoRanges, example_availability;
+aprioriEstimations = ppApriori, maxIter = 100)
+
+# Calculate errors of navigation solutions
+ppxyzErrors = [correct_positions[i] .- ppesti[i][1:3] for i in 1:length(measurements)]
+ppPosErrors = [norm(correct_positions[i] .- ppesti[i][1:3]) for i in 1:length(measurements)]
+ppMeanAcc = sum(ppPosErrors) / length(ppPosErrors)
+print("\n PointPosi error: \t", ppMeanAcc)
