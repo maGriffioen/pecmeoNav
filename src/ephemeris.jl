@@ -44,13 +44,14 @@ function NaviSimu.globalPosition(ephemeris::KeplerEphemeris, time)
     return globalPosition(ephemeris.orbits[i], timeOffset)
 end
 
-# Extract Keplerorbit and its epoch at given time from KeplerEphemeris
+# Obtain keplerorbit from KeplerEphemeris with elements AT GIVEN TIME
 function NaviSimu.KeplerOrbit(ephemeris::KeplerEphemeris, time)
     i = ephemerisIndexSearch(ephemeris::KeplerEphemeris, time)
     epoch = ephemeris.timeReferences[i]
-    orbit = ephemeris.orbits[i]
+    # Move orbit to an epoch of 0
+    orbit = propagateKeplerOrbit(ephemeris.orbits[i], -epoch)
 
-    return (orbit = orbit, orbitEpoch = epoch)
+    return orbit
 end
 
 # function NaviSimu.globalPosition(Array{KeplerEphemeris, 1}) = [NaviSimu.globalPosition()]
