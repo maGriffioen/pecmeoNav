@@ -1,7 +1,12 @@
 function findSignalTravelTime(receiver::KeplerOrbit, transmitter::KeplerOrbit, time::Number)
     recState   = state(receiver, time)
+    recPos = recState[1:3]
+    return findSignalTravelTime(recPos, transmitter, time)
+end
+
+function findSignalTravelTime(recPos::Tup3d, transmitter::KeplerOrbit, time::Number)
     transState = state(transmitter, time)
-    signalDistance = norm(recState[1:3] - transState[1:3])
+    signalDistance = norm(recPos - transState[1:3])
 
     corr = 1.0
     i = 0
@@ -9,8 +14,10 @@ function findSignalTravelTime(receiver::KeplerOrbit, transmitter::KeplerOrbit, t
         i += 1
         signalTravelTime = signalDistance / lightConst
         transState_new = state(transmitter, time - signalTravelTime)
+        # Corrected receiver position
         corr = norm(transState_new[1:3] - transState[1:3])
-        signalDistance = norm(recState[1:3] - transState[1:3])
+        transState = transState_new
+        signalDistance = norm(recPos .- transState[1:3])
     end
 
     return signalDistance / lightConst
