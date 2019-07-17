@@ -16,8 +16,8 @@ struct KeplerEphemerisSD
     tanom_sigma::Number
 end
 
-# Interpolate in KeplerEphemeris to find position at given time
-function NaviSimu.globalPosition(ephemeris::KeplerEphemeris, time)
+# Search for an orbit index in a Kepler Epehemeris corresponding to a given time
+function ephemerisIndexSearch(ephemeris::KeplerEphemeris, time)
     i = 0   # Iterator to select correct epheremis
 
     # Find last reference time smaller than time
@@ -32,9 +32,25 @@ function NaviSimu.globalPosition(ephemeris::KeplerEphemeris, time)
         i =1
     end
 
+    return i
+end
+
+# Interpolate in KeplerEphemeris to find position at given time
+function NaviSimu.globalPosition(ephemeris::KeplerEphemeris, time)
+    i = ephemerisIndexSearch(ephemeris::KeplerEphemeris, time)
+
     timeOffset = time - ephemeris.timeReferences[i]
     # println("dt= ", timeOffset)
     return globalPosition(ephemeris.orbits[i], timeOffset)
+end
+
+# Extract Keplerorbit and its epoch at given time from KeplerEphemeris
+function NaviSimu.KeplerOrbit(ephemeris::KeplerEphemeris, time)
+    i = ephemerisIndexSearch(ephemeris::KeplerEphemeris, time)
+    epoch = ephemeris.timeReferences[i]
+    orbit = ephemeris.orbits[i]
+
+    return (orbit = orbit, orbitEpoch = epoch)
 end
 
 # function NaviSimu.globalPosition(Array{KeplerEphemeris, 1}) = [NaviSimu.globalPosition()]
