@@ -35,23 +35,46 @@ function ephemerisIndexSearch(ephemeris::KeplerEphemeris, time)
     return i
 end
 
-# Interpolate in KeplerEphemeris to find position at given time
-function NaviSimu.globalPosition(ephemeris::KeplerEphemeris, time)
-    i = ephemerisIndexSearch(ephemeris::KeplerEphemeris, time)
+if (NaviSimuAsModule)
+    # Interpolate in KeplerEphemeris to find position at given time
+    function NaviSimu.globalPosition(ephemeris::KeplerEphemeris, time)
+        i = ephemerisIndexSearch(ephemeris::KeplerEphemeris, time)
 
-    timeOffset = time - ephemeris.timeReferences[i]
-    # println("dt= ", timeOffset)
-    return globalPosition(ephemeris.orbits[i], timeOffset)
+        timeOffset = time - ephemeris.timeReferences[i]
+        # println("dt= ", timeOffset)
+        return globalPosition(ephemeris.orbits[i], timeOffset)
+    end
+else
+    # Interpolate in KeplerEphemeris to find position at given time
+    function globalPosition(ephemeris::KeplerEphemeris, time)
+        i = ephemerisIndexSearch(ephemeris::KeplerEphemeris, time)
+
+        timeOffset = time - ephemeris.timeReferences[i]
+        # println("dt= ", timeOffset)
+        return globalPosition(ephemeris.orbits[i], timeOffset)
+    end
 end
 
-# Obtain keplerorbit from KeplerEphemeris with elements AT GIVEN TIME
-function NaviSimu.KeplerOrbit(ephemeris::KeplerEphemeris, time)
-    i = ephemerisIndexSearch(ephemeris::KeplerEphemeris, time)
-    epoch = ephemeris.timeReferences[i]
-    # Move orbit to an epoch of 0
-    orbit = propagateKeplerOrbit(ephemeris.orbits[i], -epoch)
+if (NaviSimuAsModule)
+    # Obtain keplerorbit from KeplerEphemeris with elements AT GIVEN TIME
+    function NaviSimu.KeplerOrbit(ephemeris::KeplerEphemeris, time)
+        i = ephemerisIndexSearch(ephemeris::KeplerEphemeris, time)
+        epoch = ephemeris.timeReferences[i]
+        # Move orbit to an epoch of 0
+        orbit = propagateKeplerOrbit(ephemeris.orbits[i], -epoch)
 
-    return orbit
+        return orbit
+    end
+else
+    # Obtain keplerorbit from KeplerEphemeris with elements AT GIVEN TIME
+    function KeplerOrbit(ephemeris::KeplerEphemeris, time)
+        i = ephemerisIndexSearch(ephemeris::KeplerEphemeris, time)
+        epoch = ephemeris.timeReferences[i]
+        # Move orbit to an epoch of 0
+        orbit = propagateKeplerOrbit(ephemeris.orbits[i], -epoch)
+
+        return orbit
+    end
 end
 
 # function NaviSimu.globalPosition(Array{KeplerEphemeris, 1}) = [NaviSimu.globalPosition()]

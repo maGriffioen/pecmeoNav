@@ -43,6 +43,9 @@ export
     sequentialPointPosition,
     kinematicEstimation,
 
+    #naviSignals.jl
+    transmitterFinder,
+
 
     #naviSimu.jl
     instaSignal,
@@ -59,6 +62,7 @@ export
     Tup3d
 
 Tup3d = Tuple{Float64, Float64, Float64}
+NaviSimuAsModule = true
 
 include("keplerOrbits.jl")
 include("bodies.jl")
@@ -70,3 +74,5 @@ include("io/gpsData.jl")
 
 
 end
+
+using Main.NaviSimu
