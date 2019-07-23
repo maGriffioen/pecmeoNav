@@ -1,7 +1,7 @@
 using Plots, LinearAlgebra
 gr()
-include("../src/NaviSimu_adder.jl")
-using Main.NaviSimu
+include("../src/NaviSimu_lessModule.jl")
+# using Main.NaviSimu
 
 moonSat = KeplerOrbit(moon.radius + 100e3, 0.0,
     deg2rad(0), 0.0, 0.0, 0.0, moon)
@@ -16,32 +16,32 @@ navcon = pecmeo32
 
 
 
-# Find transmitter position and true time during transmission (Light time effect)
-function transmitterFinder(receptionTime::Number, receiverPos::Tup3d, transmitterOrbit::Orbit)
-    travelTime = 0.0    #Assume instant signal as first estimate
-    correction = 1      #Force loop to start
-    transTime = receptionTime   #Initialization
-    transPos = (0.0, 0.0, 0.0)  #Initialization
-
-    nIter = 0   #Iteration counter
-    # Iterate while no convergence of smaller than xx seconds is reached
-    while (abs(correction) > 1e-12)   #TODO: Tweak value for balance between stability and numerical accuracy
-        # Calculate new transmitter position & time
-        transTime = receptionTime - travelTime      #Time of transmission of signal
-        transPos = globalPosition(transmitterOrbit, transTime)  #Position of transmitting satellite
-        distance = norm(transPos .- receiverPos)    #Travel distance of signal
-        travelTime = distance/lightConst            #Travel time of signal
-
-        # Find applied correction for the decision if convergence has been reached
-        correction = receptionTime - transTime - travelTime
-        nIter +=1
-        # println(nIter," ", correction)
-    end
-    # println(nIter)
-
-    return (transmissionTime = transTime, pos = transPos, travelTime = travelTime,
-        lastCorrection = correction, iterations = nIter)
-end
+# # Find transmitter position and true time during transmission (Light time effect)
+# function transmitterFinder(receptionTime::Number, receiverPos::Tup3d, transmitterOrbit::Orbit)
+#     travelTime = 0.0    #Assume instant signal as first estimate
+#     correction = 1      #Force loop to start
+#     transTime = receptionTime   #Initialization
+#     transPos = (0.0, 0.0, 0.0)  #Initialization
+#
+#     nIter = 0   #Iteration counter
+#     # Iterate while no convergence of smaller than xx seconds is reached
+#     while (abs(correction) > 1e-12)   #TODO: Tweak value for balance between stability and numerical accuracy
+#         # Calculate new transmitter position & time
+#         transTime = receptionTime - travelTime      #Time of transmission of signal
+#         transPos = globalPosition(transmitterOrbit, transTime)  #Position of transmitting satellite
+#         distance = norm(transPos .- receiverPos)    #Travel distance of signal
+#         travelTime = distance/lightConst            #Travel time of signal
+#
+#         # Find applied correction for the decision if convergence has been reached
+#         correction = receptionTime - transTime - travelTime
+#         nIter +=1
+#         # println(nIter," ", correction)
+#     end
+#     # println(nIter)
+#
+#     return (transmissionTime = transTime, pos = transPos, travelTime = travelTime,
+#         lastCorrection = correction, iterations = nIter)
+# end
 
 # ODEs to describe time dilation of satellite with respect to Earth-fixed-rotating clock
 function clockODE(x::Array{<:Number, 1}, t::Number)
@@ -258,7 +258,7 @@ end
 
 # Simulate the measurements at a single epoch
 function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiverOrbit::Orbit, navcon::Orbit;
-    writeToFile = false, outputFile = "")
+    lighttimeEffect = true, writeToFile = false, outputFile = "")
     nsats = size(navcon)                        #Navigation constellation size
     codes = Array{Float64, 1}(undef, nsats)
     phases = Array{Float64, 1}(undef, nsats)
@@ -267,14 +267,19 @@ function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiv
     #Loop over navigation satellites for this epoch
     for prn in 1:nsats
         receiverPosition = globalPosition(receiverOrbit, inertialTime)
-        transmitter = transmitterFinder(inertialTime, receiverPosition, navcon[prn])
+        if lighttimeEffect
+            transmitter = transmitterFinder(inertialTime, receiverPosition, navcon[prn])
+        else
+            transmitter = (pos = globalPosition(navcon[prn], inertialTime),
+            transmissionTime = inertialTime)
+        end
 
         connection = true
 
         # Determine if in shadow of Earth or Moon
         # Check the line of sight both during reception and transmission. Assume no LOS when satellites are shadowed by body during either time.
-        losEarly = NaviSimu.hasLineOfSightEarthMoon(receiverPosition, transmitter.pos, transmitter.transmissionTime)
-        losLate = NaviSimu.hasLineOfSightEarthMoon(receiverPosition, transmitter.pos, inertialTime)
+        losEarly = hasLineOfSightEarthMoon(receiverPosition, transmitter.pos, transmitter.transmissionTime)
+        losLate = hasLineOfSightEarthMoon(receiverPosition, transmitter.pos, inertialTime)
         los = (losEarly && losLate)
 
         # Check if satellites are connected and within line of sight
@@ -285,7 +290,11 @@ function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiv
             #Simulate Code measurement
             measurementError = 0.0  # Error within receiver system, dependent on SNR
                 # Neglecting transmitter clock error and relativistic effect -> will be largely recovered
-            codes[prn] = (receiverTime - transmitter.transmissionTime) * lightConst + measurementError
+            if lighttimeEffect
+                codes[prn] = (receiverTime - transmitter.transmissionTime) * lightConst + measurementError
+            else
+                codes[prn] = norm(globalPosition(receiverOrbit, inertialTime) .- transmitter.pos) + measurementError
+            end
 
             #Simulate Phase measurement
             phases[prn] = 0.0
@@ -299,7 +308,7 @@ function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiv
 end
 
 # Simulate measurements at sequential times
-function simulateMeasurements(inertialTime::Array{<:Number}, receiverTime::Array{<:Number}, receiverOrbit::Orbit, navcon::Orbit)
+function simulateMeasurements(inertialTime::Array{<:Number}, receiverTime::Array{<:Number}, receiverOrbit::Orbit, navcon::Orbit; lighttimeEffect = true)
     #Raise error if number of measurements is not clear
     if (length(inertialTime) != length(receiverTime))
         error("simulateMeasurements: Number of true times not equal to number of receiver times")
@@ -314,7 +323,7 @@ function simulateMeasurements(inertialTime::Array{<:Number}, receiverTime::Array
     for epoch = 1:nepochs
         msrmt = simulateMeasurements(inertialTime[epoch],
                     receiverTime[epoch],
-                    receiverOrbit, navcon)
+                    receiverOrbit, navcon; lighttimeEffect = lighttimeEffect)
         codeObs[epoch, :] = msrmt.code
         phaseObs[epoch, :] = msrmt.phase
         availability[epoch, :] = msrmt.avail
@@ -324,6 +333,7 @@ function simulateMeasurements(inertialTime::Array{<:Number}, receiverTime::Array
 end
 
 measurements = 5.0:100.2:10000.0
+# measurements = 0.0:30.0:2880
 results = rk4(clockODE, 10000, [0.0, 0.0], 10)
 inter = rk4measurementFinder(clockODE, measurements, 0.0, 1.0; interParam=2)
 trueMeasurementTimes = inter.t  # Inertial times during measurements
@@ -331,7 +341,7 @@ localReceiverMeasurementTimes = inter.y[1, :]   # local time progression during 
 receiverClockMeasurementTimes = inter.y[2, :]   # Time on receiver clock during measurements. Includes clock freq correction (and clock errors).
 transmitter = transmitterFinder(inter.t[1], globalPosition(receiverOrbit, inter.t[1]), navcon[1])
 singleMeasurement = simulateMeasurements(inter.t[20], inter.y[2, 20], moonSat, navcon)
-allMeasurements = simulateMeasurements(inter.t, inter.y[2,:], moonSat, navcon)
+allMeasurements = simulateMeasurements(inter.t, inter.y[2,:], moonSat, navcon; lighttimeEffect = false)
 
 trueOffset = results.y[1,:]- results.t
 clockOffset= results.y[2,:]- results.t
@@ -352,15 +362,15 @@ correct_positions = [globalPosition(moonSat, trueMeasurementTimes[i]) for i in 1
 
 # Example position estimation
 example_navconEphemeres = [trueKeplerEphemeris([0, 7200, 14400], navcon[i]) for i in 1:size(navcon)]
-example_measurementEpochs = allMeasurements.timeStamp #.-  1.3297363214692226
+example_measurementEpochs = allMeasurements.timeStamp
 example_pseudoRanges = allMeasurements.codeObs
 example_availability = allMeasurements.availability
 ppApriori = vcat([vcat([j for j in bodyPosition(moon, allMeasurements.timeStamp[i])], 0.0)' for i in 1:length(measurements)]...)
 ppesti = sequentialPointPosition(example_measurementEpochs, example_navconEphemeres, example_pseudoRanges, example_availability;
-aprioriEstimations = ppApriori, maxIter = 100)
+aprioriEstimations = ppApriori, maxIter = 100, lighttimeCorrection = false)
 
 # Calculate errors of navigation solutions
-ppxyzErrors = [correct_positions[i] .- ppesti[i][1:3] for i in 1:length(measurements)]
-ppPosErrors = [norm(correct_positions[i] .- ppesti[i][1:3]) for i in 1:length(measurements)]
-ppMeanAcc = sum(ppPosErrors) / length(ppPosErrors)
+ppxyzErrors = [correct_positions[i] .- ppesti.estimation[i][1:3] for i in 1:length(measurements)]
+ppPosErrors = [norm(correct_positions[i] .- ppesti.estimation[i][1:3]) for i in 1:length(measurements)]
+ppMeanAcc = sum(ppPosErrors[ppesti.resultValidity]) / length(ppPosErrors[ppesti.resultValidity])
 print("\n PointPosi error: \t", ppMeanAcc)

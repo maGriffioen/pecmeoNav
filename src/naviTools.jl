@@ -129,43 +129,91 @@ hasLineOfSightEarthMoon(receiverLoc, transmitterLoc, time) =
     hasLineOfSightEarth(receiverLoc, transmitterLoc) .* hasLineOfSightMoon(receiverLoc, transmitterLoc, time)
 
 # Perform a single point position
-function pointPosition(ranges, navSats; maxIter = 10, correctionLimit = 1e-8,
-    aprioriEstimation = [0.0, 0.0, 0.0, 0.0])
+function pointPosition(ranges, navSats, epochTime; maxIter = 10, correctionLimit = 1e-8,
+    aprioriEstimation = [0.0, 0.0, 0.0, 0.0], lighttimeCorrection = true)
 
     estimation = aprioriEstimation
+    nObservations = length(ranges)
     niter = 0
-    correction = correctionLimit * 10
 
-    while (niter < maxIter && correction > correctionLimit)
-      estimation_new = pointPositionIteration(estimation, ranges, navSats)
-      correction = maximum(abs.(estimation_new.-estimation))
-      estimation = estimation_new
-      niter += 1
+    if nObservations > 3
+        sufficientObervables = true
+            #TODO:: What happens with n < 4? neglect those?
+
+        correction = correctionLimit * 10
+
+        while (niter < maxIter && correction > correctionLimit)
+          estimation_new = pointPositionIteration(estimation, ranges, navSats,
+            epochTime; lighttimeCorrection = lighttimeCorrection)
+          correction = maximum(abs.(estimation_new.-estimation))
+          estimation = estimation_new
+          niter += 1
+        end
+    else
+        sufficientObervables = false
     end
-    return Tuple(estimation)
+
+    return (estimation = Tuple(estimation), success = sufficientObervables)
 end
 
 # Perform a single point position estimation iteration
-function pointPositionIteration(aPriEst, rangeData, navconPos)
-   nNavsat = length(navconPos)
-   aPriPos = Tuple(aPriEst[1:3])
-   aPriRange = map(x -> norm(aPriPos .- navconPos[x])+aPriEst[4], 1:length(navconPos))
-   designMat = findPPDesignMatrix(aPriPos, navconPos)
+# TODO:: ADD lightime correction warning
+function pointPositionIteration(aPriEst, rangeData, navconPos::Array{Tup3d, 1}, epochTime; lighttimeCorrection = true)
 
-   #Least squares estimation of position correction
-   deltaPos = pinv(designMat' * designMat) * designMat' * (rangeData - aPriRange)
-   return aPriEst .+ deltaPos
+    # println("Point position iteration based on static constellation coordinates")
+    nNavsat = length(navconPos)
+    aPriPos = Tuple(aPriEst[1:3])
+    aPriRange = map(x -> norm(aPriPos .- navconPos[x])+aPriEst[4], 1:length(navconPos))
+    designMat = findPPDesignMatrix(aPriPos, navconPos)
+
+    #Least squares estimation of position correction
+    deltaPos = pinv(designMat' * designMat) * designMat' * (rangeData - aPriRange)
+    return aPriEst .+ deltaPos
 end
+
+# Perform a single point position estimation iteration based on constellation Ephemeris
+# TODO:: add lighttime correction
+function pointPositionIteration(aPriEst, rangeData, navigationEphemeris::Array{<:Ephemeris}, epochTime; lighttimeCorrection = true)
+
+    nNavsat = length(navigationEphemeris)
+
+    # println("Point position iteration based on constellation ephemeres")
+    measurementTime = epochTime
+    if (lighttimeCorrection)
+        # Find positions of navigation satellites INCLUDING lighttime effect
+        # Ephemeris are those selected from measurementTime
+        # navConOrbits = [KeplerOrbit(navigationEphemeris[prn], measurementTime) for prn in 1:nNavsat]
+        navconPos = [transmitterFinder(measurementTime, Tuple(aPriEst[1:3]), KeplerOrbit(navigationEphemeris[prn], measurementTime)).pos for prn in 1:nNavsat]
+    else
+        # Find positions of navigation satellite at time of signal reception
+        # e.g. not taking into account the light time effect
+        navconPos = [globalPosition(navigationEphemeris[prn], measurementTime) for prn in 1:nNavsat]
+    end
+
+    if length(rangeData) == 0
+        println("Zero-measurements case")
+    end
+
+    aPriPos = Tuple(aPriEst[1:3])
+    aPriRange = map(x -> norm(aPriPos .- navconPos[x])+aPriEst[4], 1:length(navconPos))
+    designMat = findPPDesignMatrix(aPriPos, navconPos)
+
+    #Least squares estimation of position correction
+    deltaPos = pinv(designMat' * designMat) * designMat' * (rangeData - aPriRange)
+    return aPriEst .+ deltaPos
+end
+
 
 # Perform batch of point position estimations for a single satellite on various epochs
 function sequentialPointPosition(epochTimes, navigationEphemeris::Array{<:Ephemeris},
-    pseudoRanges, availability; aprioriEstimations = [0.0], maxIter = 10, correctionLimit = 1e-8)
+    pseudoRanges, availability; aprioriEstimations = [0.0], maxIter = 10, correctionLimit = 1e-8,
+    lighttimeCorrection = true)
 
 
     n_epochs = length(epochTimes)
 
     # Check validity of apriori estimations, and create zeros to reset when needed
-    if (aprioriEstimations == [0])
+    if (aprioriEstimations == [0.0])
         aprioriEstimations = zeros(n_epochs, 4)
 
     elseif (size(aprioriEstimations, 1) != n_epochs
@@ -178,12 +226,34 @@ function sequentialPointPosition(epochTimes, navigationEphemeris::Array{<:Epheme
         aprioriEstimations = zeros(n_epochs, 4)
     end
 
-    # navCon = navigationConstellation
-    return [pointPosition(pseudoRanges[epoch, availability[epoch, :]],
-                [globalPosition(navigationEphemeris[i], epochTimes[epoch]) for i in 1:length(navigationEphemeris)][availability[epoch, :]];
+
+    # Ability to bipass lighttime correction with old point position estimation
+    # It is recommended to keep ltc = true
+    ltc = true
+
+
+    if !ltc
+        ppResult = [pointPosition(pseudoRanges[epoch, availability[epoch, :]],
+                    [globalPosition(navigationEphemeris[i], epochTimes[epoch]) for i in 1:length(navigationEphemeris)][availability[epoch, :]],
+                    epochTimes[epoch];
                     maxIter=maxIter, correctionLimit=correctionLimit,
-                    aprioriEstimation = aprioriEstimations[epoch, :])
-                for epoch in 1:n_epochs]
+                    aprioriEstimation = aprioriEstimations[epoch, :],
+                    lighttimeCorrection = lighttimeCorrection)
+                    for epoch in 1:n_epochs]
+    else
+
+        ppResult =  [pointPosition(pseudoRanges[epoch, availability[epoch, :]],
+                    navigationEphemeris[availability[epoch, :]],
+                    epochTimes[epoch];
+                    maxIter=maxIter, correctionLimit=correctionLimit,
+                    aprioriEstimation = aprioriEstimations[epoch, :],
+                    lighttimeCorrection = lighttimeCorrection)
+                    for epoch in 1:n_epochs]
+    end
+    ppEstimation = [i.estimation for i in ppResult]
+    estimationSuccess = [i.success for i in ppResult]
+
+    return (estimation = ppEstimation, resultValidity = estimationSuccess)
 end
 
 # Perform the entire kinematic estmiation
@@ -195,7 +265,7 @@ function kinematicEstimation(navigationEphemeris::Array{<:Ephemeris}, epochTimes
    n_epochs = length(epochTimes)    #Number of epochs
    # Create apriori position and clock error estimation through point positioning
    global ppesti = sequentialPointPosition(epochTimes, navigationEphemeris, rangeData, availability;
-    aprioriEstimations = ppApriori, maxIter=maxIter_pp, correctionLimit = 1e-3)
+    aprioriEstimations = ppApriori, maxIter=maxIter_pp, correctionLimit = 1e-3).estimation
    global apriPosTime = vcat(map(x-> collect(ppesti[x]), 1:n_epochs)...)  #apriori position and time are those from point positioning
 
    kinEstim = apriPosTime  #Dont add bias estimation -> The kinematic iterator adds those dynamically when needed

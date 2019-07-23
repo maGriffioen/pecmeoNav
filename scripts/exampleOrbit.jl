@@ -1,6 +1,6 @@
 using Plots, ProgressMeter, LinearAlgebra, Random, DoubleFloats
-include("../src/NaviSimu.jl")
-using Main.NaviSimu
+include("../src/NaviSimu_lessModule.jl")
+# using Main.NaviSimu
 
 include("gpsKepler.jl")
 # include("../src/keplerOrbits.jl")
@@ -53,7 +53,7 @@ receiverOrbit = moonSat
 navconEphemeres = [trueKeplerEphemeris([0, 3600], navcon[i]) for i in 1:size(navcon)]
 
 # Generate distubed ephemeres
-# navconEphemeres = [noisyKeplerEphemeris([0, 3600], navcon[i], NaviSimu.KeplerEphemerisSD(1.0, 0.0, 0.0, 0.0, 0.0, 0.0)) for i in 1:size(navcon)]
+# navconEphemeres = [noisyKeplerEphemeris([0, 3600], navcon[i], KeplerEphemerisSD(1.0, 0.0, 0.0, 0.0, 0.0, 0.0)) for i in 1:size(navcon)]
 
 nsats = size(navcon) #Total number of satellites in the navigation constellation
 codeSig = Array{Float64}(undef, nepochs, nsats)    #Per-epoch, per-prn code measurements
@@ -97,13 +97,14 @@ freq = 1575.42e6
 waveLen = lightConst / freq
 pseudoRanges = codeSig * lightConst
 # pseudoRanges += randn(size(pseudoRanges)) .* (pseudoRanges.!=0.0) * 1 *0   #1m normal errors
+# pseudoRanges += randn(size(pseudoRanges)) .* (pseudoRanges.!=0.0) * 2   #1m normal errors
 phaseLens = phaseSig * waveLen
 # phaseLens += randn(size(phaseLens)) .* (phaseLens.!=0.0) *1e-3 *0       #1mm normal errors
 
 ### Point position estimation ###
 ppApriori = vcat([vcat([j for j in bodyPosition(moon, timevec[i])], 0.0)' for i in 1:nepochs]...)
 ppesti = sequentialPointPosition(timevec, navconEphemeres, pseudoRanges, availability;
-aprioriEstimations = ppApriori, maxIter = 100)
+aprioriEstimations = ppApriori, maxIter = 100, lighttimeCorrection = false).estimation
 ppPosErrors = [norm(truePositions[i] .- ppesti[i][1:3]) for i in 1:nepochs]
 
 ### Kinematic estimation

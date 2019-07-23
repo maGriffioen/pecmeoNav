@@ -1,9 +1,10 @@
+# Obsolete light time effect function
 function findSignalTravelTime(receiver::KeplerOrbit, transmitter::KeplerOrbit, time::Number)
     recState   = state(receiver, time)
     recPos = recState[1:3]
     return findSignalTravelTime(recPos, transmitter, time)
 end
-
+# Obsolete light time effect function
 function findSignalTravelTime(recPos::Tup3d, transmitter::KeplerOrbit, time::Number)
     transState = state(transmitter, time)
     signalDistance = norm(recPos - transState[1:3])
@@ -20,7 +21,39 @@ function findSignalTravelTime(recPos::Tup3d, transmitter::KeplerOrbit, time::Num
         signalDistance = norm(recPos .- transState[1:3])
     end
 
-    return signalDistance / lightConst
+    return (signalTravelTime = signalDistance / lightConst, transmitterPosition = transState[1:3])
+end
+
+# Find transmitter position and true time during transmission (Light time effect)
+function transmitterFinder(receptionTime::Number, receiverPos::Tup3d, transmitterOrbit::Orbit)
+    travelTime = 0.0    #Assume instant signal as first estimate
+    correction = 1      #Force loop to start
+    transTime = receptionTime   #Initialization
+    transPos = (0.0, 0.0, 0.0)  #Initialization
+
+    nIter = 0   #Iteration counter
+    # Iterate while no convergence of smaller than xx seconds is reached
+    while (abs(correction) > 1e-14 && nIter < 10)   #TODO: Tweak value for balance between stability and numerical accuracy
+        # Calculate new transmitter position & time
+        transTime = receptionTime - travelTime      #Time of transmission of signal
+        transPos = globalPosition(transmitterOrbit, transTime)  #Position of transmitting satellite
+        distance = norm(transPos .- receiverPos)    #Travel distance of signal
+        travelTime = distance/lightConst            #Travel time of signal
+
+        # Find applied correction for the decision if convergence has been reached
+        correction = receptionTime - transTime - travelTime
+        nIter +=1
+        # println(nIter," ", correction)
+    end
+    # println(nIter)
+
+    return (transmissionTime = transTime, pos = transPos, travelTime = travelTime,
+        lastCorrection = correction, iterations = nIter)
+end
+
+function transmitterFinder(receptionTime::Number, receiverPos::Tup3d, transmitterEpoch::Array{<:Ephemeris})
+
+    return transmitterFinder(receptionTime, receiverPos, transmitterOrbit)
 end
 
 
