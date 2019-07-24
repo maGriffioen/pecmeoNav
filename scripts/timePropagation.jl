@@ -316,7 +316,7 @@ function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiv
             end
 
             #Simulate Phase measurement
-            phases[prn] = 0.0
+            phases[prn] = 0.0  # (phi_u(t0) + f*t(t-t0) + f*(clock bias u)) - (phi^s(t0) + f(t-tau-t0) + f*(clock bias s) )
         else
             # No measurement taken
             codes[prn] = NaN64
