@@ -14,7 +14,25 @@ pecmeo32 = createCircPecmeo(26.4e6, (3, 3, 3), earth;
 receiverOrbit = moonSat
 navcon = pecmeo32
 
+struct RangeTransmitterSettings
+    zero_phase::Float64     #Radians theta(t0), where t_0 is the local Clock
+    transmitPower::Number   #Watt. Unused for receivers
+    frequency:: Number      #Hz. Ensure to match receiver and transmitter freq.
+    antennaGainFunction::Function #Antenna Gain f(theta, phi)   in db
+    pointingFunction::Function  #Pointing vector of antenna f(pos_s, t)
+    pointingErrorSD::Number     #Standard deviation of pointing error in radians
 
+end
+
+struct RangeReceiverSettings
+    zero_phase::Float64     #Radians theta(t0), where t_0 is the local Clock
+    receptionNoiseTemperature::Number   #Temperature of receiver noise
+    receptionBandwidth::Number  #Bandwidth of receiver
+    frequency:: Number      #Hz. Ensure to match receiver and transmitter freq.
+    antennaGainFunction::Function #Antenna Gain f(theta, phi)  in db
+    pointingFunction::Function  #Pointing vector of antenna f(pos_s, t)
+    pointingErrorSD::Number     #Standard deviation of pointing error in radians
+end
 
 # # Find transmitter position and true time during transmission (Light time effect)
 # function transmitterFinder(receptionTime::Number, receiverPos::Tup3d, transmitterOrbit::Orbit)
@@ -257,7 +275,8 @@ function rk4Step(odefun, t_curr, y_curr, dydt_curr, stepSize)
 end
 
 # Simulate the measurements at a single epoch
-function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiverOrbit::Orbit, navcon::Orbit;
+function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiverOrbit::Orbit, navcon::Orbit,
+    receiverSettings::RangeReceiverSettings, transmitterSettings::RangeTransmitterSettings;
     lighttimeEffect = true, writeToFile = false, outputFile = "")
     nsats = size(navcon)                        #Navigation constellation size
     codes = Array{Float64, 1}(undef, nsats)
@@ -308,7 +327,8 @@ function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiv
 end
 
 # Simulate measurements at sequential times
-function simulateMeasurements(inertialTime::Array{<:Number}, receiverTime::Array{<:Number}, receiverOrbit::Orbit, navcon::Orbit; lighttimeEffect = true)
+function simulateMeasurements(inertialTime::Array{<:Number}, receiverTime::Array{<:Number}, receiverOrbit::Orbit, navcon::Orbit,
+    receiverSettings::RangeReceiverSettings, transmitterSettings::RangeTransmitterSettings; lighttimeEffect = true)
     #Raise error if number of measurements is not clear
     if (length(inertialTime) != length(receiverTime))
         error("simulateMeasurements: Number of true times not equal to number of receiver times")
@@ -323,7 +343,9 @@ function simulateMeasurements(inertialTime::Array{<:Number}, receiverTime::Array
     for epoch = 1:nepochs
         msrmt = simulateMeasurements(inertialTime[epoch],
                     receiverTime[epoch],
-                    receiverOrbit, navcon; lighttimeEffect = lighttimeEffect)
+                    receiverOrbit, navcon,
+                    receiverSettings, transmitterSettings;
+                    lighttimeEffect = lighttimeEffect)
         codeObs[epoch, :] = msrmt.code
         phaseObs[epoch, :] = msrmt.phase
         availability[epoch, :] = msrmt.avail
@@ -331,6 +353,22 @@ function simulateMeasurements(inertialTime::Array{<:Number}, receiverTime::Array
 
     return (codeObs = codeObs, phaseObs = phaseObs, availability = availability, timeStamp = receiverTime)
 end
+
+recGain(theta, phi) = 0.0
+txGain(theta, phi) = (rad2deg(theta) < 10.5) * 15.0
+recPointing(pos, t) = (0.0, 0.0, 0.0)
+function txPointing_PECMEO(satellitePosition, t)
+    targetPosition = bodyPosition(moon, t)
+    pointingVector = (targetPosition .- satellitePosition)
+    pointingVector = pointingVector ./ norm(relVector)
+    return pointingVector
+end
+
+operatingFrequency = 1.5e9
+recSettings = RangeReceiverSettings( rand(Float64), 513.0, 2e6, operatingFrequency, recGain,
+    recPointing, 0.0)
+txSettings = RangeTransmitterSettings( rand(Float64), 300.0, operatingFrequency, txGain,
+    txPointing_PECMEO, 0.0)
 
 measurements = 5.0:100.2:10000.0
 # measurements = 0.0:30.0:2880
@@ -340,8 +378,8 @@ trueMeasurementTimes = inter.t  # Inertial times during measurements
 localReceiverMeasurementTimes = inter.y[1, :]   # local time progression during measurements
 receiverClockMeasurementTimes = inter.y[2, :]   # Time on receiver clock during measurements. Includes clock freq correction (and clock errors).
 transmitter = transmitterFinder(inter.t[1], globalPosition(receiverOrbit, inter.t[1]), navcon[1])
-singleMeasurement = simulateMeasurements(inter.t[20], inter.y[2, 20], moonSat, navcon)
-allMeasurements = simulateMeasurements(inter.t, inter.y[2,:], moonSat, navcon; lighttimeEffect = false)
+singleMeasurement = simulateMeasurements(inter.t[20], inter.y[2, 20], moonSat, navcon, recSettings, txSettings)
+allMeasurements = simulateMeasurements(inter.t, inter.y[2,:], moonSat, navcon, recSettings, txSettings; lighttimeEffect = false)
 
 trueOffset = results.y[1,:]- results.t
 clockOffset= results.y[2,:]- results.t
