@@ -28,6 +28,8 @@ struct RangeReceiverSettings
     zero_phase::Float64     #Radians theta(t0), where t_0 is the local Clock
     receptionNoiseTemperature::Number   #Temperature of receiver noise
     receptionBandwidth::Number  #Bandwidth of receiver
+    trackingLoopBandwidth::Number
+    predetectionIntegrationInterval::Number
     frequency:: Number      #Hz. Ensure to match receiver and transmitter freq.
     antennaGainFunction::Function #Antenna Gain f(theta, phi)  in db
     pointingFunction::Function  #Pointing vector of antenna f(pos_s, t)
@@ -274,9 +276,54 @@ function rk4Step(odefun, t_curr, y_curr, dydt_curr, stepSize)
     return (y=y, t=t, dydt=dydt)
 end
 
+lin2log(linValue) = 10 * log10(linValue)
+log2lin(logValue) = 10^(logValue / 10)
+
+# Calculate the linkbudget and find SNR and C/N0
+function snrCalculation(inertialTime, receiverTime, receiverPosition, transmitter,
+        receiverSettings, transmitterSettings)
+
+        # Calculate antenna gains from pointing and signal vectors
+        relativePositionRec = receiverPosition .- transmitter.pos
+        signalDistance = norm(relativePositionRec)
+        pointingVectorTX = transmitterSettings.pointingFunction( transmitter.pos, transmitter.transmissionTime )
+        pointingVectorRec = receiverSettings.pointingFunction( receiverPosition, receiverTime )
+
+        pointingoffsetTX = acos(dot( relativePositionRec, pointingVectorTX ) / (norm(relativePositionRec) * norm(pointingVectorTX)))
+        gainTX = transmitterSettings.antennaGainFunction(pointingoffsetTX, 0.0)
+
+        pointingoffsetRec = acos(dot( .-relativePositionRec, pointingVectorRec ) / (norm(.-relativePositionRec) * norm(pointingVectorRec)))
+        gainRec = receiverSettings.antennaGainFunction( pointingoffsetRec, 0.0 )
+
+        # Calculate some fundamental properties
+        freq = receiverSettings.frequency
+        wavelength = lightConst / freq
+
+        # EIRP and free space loss
+        EIRP = lin2log( transmitterSettings.transmitPower ) + gainTX  # [dB] effective receiver power
+        fsl = lin2log( ( wavelength/( 4*pi*signalDistance ))^2 )    # [db] free space loss
+        attenuation = 2     # [dB] hardware noise, polarization offsets, etc.
+        receivedPower = EIRP + fsl - attenuation        # [dB] signal Power
+
+        # Noise level
+        recTemp = receiverSettings.receptionNoiseTemperature
+        recBw = receiverSettings.receptionBandwidth
+        noise = lin2log( recTemp * recBw * bolzmanConst )
+
+        #SNR
+        snr = receivedPower - noise # [dB] signal to noise ratio
+        snr_straight = log2lin( snr ) # [-] signal to noise (straight) ratio
+        cnr_straight = snr_straight * recBw # [dB-Hz]
+        cnr = lin2log( cnr_straight )
+
+
+        # return (snr = snr, cnr = cnr, EIRP = EIRP, fsl = fsl, att = attenuation, receivedPower = receivedPower, noise = noise, wl = wavelength)
+        return (snr = snr, cnr = cnr, cnr_straight = cnr_straight)
+end
+
 # Simulate the measurements at a single epoch
 function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiverOrbit::Orbit, navcon::Orbit,
-    receiverSettings::RangeReceiverSettings, transmitterSettings::RangeTransmitterSettings;
+    receiverSettings::RangeReceiverSettings, transmitterSettings::Array{RangeTransmitterSettings,1};
     lighttimeEffect = true, writeToFile = false, outputFile = "")
     nsats = size(navcon)                        #Navigation constellation size
     codes = Array{Float64, 1}(undef, nsats)
@@ -287,8 +334,10 @@ function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiv
     for prn in 1:nsats
         receiverPosition = globalPosition(receiverOrbit, inertialTime)
         if lighttimeEffect
+            # Transmitter position during transmission of received signal
             transmitter = transmitterFinder(inertialTime, receiverPosition, navcon[prn])
         else
+            # Transmitter position during signal reception (no light time effect)
             transmitter = (pos = globalPosition(navcon[prn], inertialTime),
             transmissionTime = inertialTime)
         end
@@ -303,20 +352,50 @@ function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiv
 
         # Check if satellites are connected and within line of sight
         available = los && connection
+        freq = receiverSettings.frequency
+        wavelength = lightConst / freq
 
         avail[prn] = available
         if (available)
-            #Simulate Code measurement
-            measurementError = 0.0  # Error within receiver system, dependent on SNR
-                # Neglecting transmitter clock error and relativistic effect -> will be largely recovered
             if lighttimeEffect
-                codes[prn] = (receiverTime - transmitter.transmissionTime) * lightConst + measurementError
+                txTime = transmitter.transmissionTime
             else
-                codes[prn] = norm(globalPosition(receiverOrbit, inertialTime) .- transmitter.pos) + measurementError
+                txTime = inertialTime
             end
 
+            #Check Link budget and use SNR & C/N0 to determine error SD -> generate errors from this
+            txSettings = transmitterSettings[prn]
+            snrCalc = snrCalculation(inertialTime, receiverTime, receiverPosition, transmitter,
+                    receiverSettings, txSettings)
+            cnr = snrCalc.cnr_straight
+            codeSD = sqrt(((4 * 1) / (2*cnr))) * 293     # Simple model, allow replacement of model :)
+            phaseSD =sqrt((receiverSettings.trackingLoopBandwidth / cnr) *
+                (1+ (1/ ( 2*cnr * receiverSettings.predetectionIntegrationInterval )))) * (wavelength/(2*pi))
+
+            #Simulate Code measurement
+            codeError = randn() * codeSD  # Error within receiver system, dependent on SNR
+                # Neglecting transmitter clock error and relativistic effect -> will be largely recovered
+            if lighttimeEffect# Please use this and apply the light time effect :)
+                codes[prn] = (receiverTime - transmitter.transmissionTime) * lightConst + codeError
+            else
+                # Unrealistically neglecting light time effect, which really shouldnt be neglected
+                codes[prn] = norm(globalPosition(receiverOrbit, inertialTime) .- transmitter.pos) + codeError
+            end
+
+            phaseError = randn() * phaseSD  # Error within receiver system, dependent on C/N0
             #Simulate Phase measurement
-            phases[prn] = 0.0  # (phi_u(t0) + f*t(t-t0) + f*(clock bias u)) - (phi^s(t0) + f(t-tau-t0) + f*(clock bias s) )
+            if lighttimeEffect
+                # Please use this and apply the light time effect :)
+                phases[prn] = wavelength * (receiverSettings.zero_phase + freq*receiverTime -
+                    transmitterSettings[prn].zero_phase - freq * transmitter.transmissionTime) + phaseError
+            else
+                # Unrealistically neglecting light time effect, which really shouldnt be neglected
+                phases[prn] = wavelength * (receiverSettings.zero_phase + freq*(receiverTime) -
+                    transmitterSettings[prn].zero_phase - freq * (inertialTime)) + phaseError
+            end
+                # Receiver Clock bias is taken into receiverTime.
+                # Assuming no transmitter clock bias is present
+                # (phi_u(t0) + f*(t-t0) + f*(clock bias u)) - (phi^s(t0) + f(t-tau-t0) + f*(clock bias s) )
         else
             # No measurement taken
             codes[prn] = NaN64
@@ -328,7 +407,7 @@ end
 
 # Simulate measurements at sequential times
 function simulateMeasurements(inertialTime::Array{<:Number}, receiverTime::Array{<:Number}, receiverOrbit::Orbit, navcon::Orbit,
-    receiverSettings::RangeReceiverSettings, transmitterSettings::RangeTransmitterSettings; lighttimeEffect = true)
+    receiverSettings::RangeReceiverSettings, transmitterSettings::Array{RangeTransmitterSettings,1}; lighttimeEffect = true)
     #Raise error if number of measurements is not clear
     if (length(inertialTime) != length(receiverTime))
         error("simulateMeasurements: Number of true times not equal to number of receiver times")
@@ -360,17 +439,18 @@ recPointing(pos, t) = (0.0, 0.0, 0.0)
 function txPointing_PECMEO(satellitePosition, t)
     targetPosition = bodyPosition(moon, t)
     pointingVector = (targetPosition .- satellitePosition)
-    pointingVector = pointingVector ./ norm(relVector)
+    pointingVector = pointingVector ./ norm(pointingVector)
     return pointingVector
 end
 
-operatingFrequency = 1.5e9
-recSettings = RangeReceiverSettings( rand(Float64), 513.0, 2e6, operatingFrequency, recGain,
+operatingFrequency = 1574.42e6
+recSettings = RangeReceiverSettings( 0.0, 513.0, 2e6, 15, 20e-3, operatingFrequency, recGain,
     recPointing, 0.0)
-txSettings = RangeTransmitterSettings( rand(Float64), 300.0, operatingFrequency, txGain,
-    txPointing_PECMEO, 0.0)
+nSats = size(navcon)
+txSettings = [RangeTransmitterSettings( rand(Float64), 300.0, operatingFrequency, txGain,
+    txPointing_PECMEO, 0.0) for prn in 1:nSats]
 
-measurements = 5.0:100.2:10000.0
+measurements = 5.0:50.2:10000.0
 # measurements = 0.0:30.0:2880
 results = rk4(clockODE, 10000, [0.0, 0.0], 10)
 inter = rk4measurementFinder(clockODE, measurements, 0.0, 1.0; interParam=2)
@@ -412,3 +492,5 @@ ppxyzErrors = [correct_positions[i] .- ppesti.estimation[i][1:3] for i in 1:leng
 ppPosErrors = [norm(correct_positions[i] .- ppesti.estimation[i][1:3]) for i in 1:length(measurements)]
 ppMeanAcc = sum(ppPosErrors[ppesti.resultValidity]) / length(ppPosErrors[ppesti.resultValidity])
 print("\n PointPosi error: \t", ppMeanAcc)
+
+p3 = plot(example_measurementEpochs/3600, ppPosErrors, yaxis=("Point Position Error", (0, 2.7e4)))
