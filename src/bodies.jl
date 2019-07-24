@@ -14,7 +14,9 @@ moon = Body(
 )
 #https://ssd.jpl.nasa.gov/?sat_elem
 lunarOrbit = KeplerOrbit(0.3844e9, 0.0554, deg2rad(5.16), deg2rad(318.15), deg2rad(125.08), deg2rad(135.27) , earth)
-lightConst = 3e8
+lightConst = 299792458          # Replace me with a proper source :(
+bolzmanConst = 1.3806e-023      # Replace me with a proper source :(
+println("Add proper speed of light & bolzman constant with sources!")
 
 function bodyPosition(bodyName::String, time::Number)
     if (bodyName == "Earth")
