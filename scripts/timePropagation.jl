@@ -1,4 +1,4 @@
-using Plots, LinearAlgebra
+using Plots, LinearAlgebra, Random
 gr()
 include("../src/NaviSimu_lessModule.jl")
 # using Main.NaviSimu
@@ -324,7 +324,7 @@ end
 # Simulate the measurements at a single epoch
 function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiverOrbit::Orbit, navcon::Orbit,
     receiverSettings::RangeReceiverSettings, transmitterSettings::Array{RangeTransmitterSettings,1};
-    lighttimeEffect = true, writeToFile = false, outputFile = "")
+    lighttimeEffect = true, addNoise = true, writeToFile = false, outputFile = "")
     nsats = size(navcon)                        #Navigation constellation size
     codes = Array{Float64, 1}(undef, nsats)
     phases = Array{Float64, 1}(undef, nsats)
@@ -363,26 +363,32 @@ function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiv
                 txTime = inertialTime
             end
 
-            #Check Link budget and use SNR & C/N0 to determine error SD -> generate errors from this
-            txSettings = transmitterSettings[prn]
-            snrCalc = snrCalculation(inertialTime, receiverTime, receiverPosition, transmitter,
-                    receiverSettings, txSettings)
-            cnr = snrCalc.cnr_straight
-            codeSD = sqrt(((4 * 1) / (2*cnr))) * 293     # Simple model, allow replacement of model :)
-            phaseSD =sqrt((receiverSettings.trackingLoopBandwidth / cnr) *
-                (1+ (1/ ( 2*cnr * receiverSettings.predetectionIntegrationInterval )))) * (wavelength/(2*pi))
+            if (addNoise)
+                #Check Link budget and use SNR & C/N0 to determine error SD -> generate errors from this
+                txSettings = transmitterSettings[prn]
+                snrCalc = snrCalculation(inertialTime, receiverTime, receiverPosition, transmitter,
+                        receiverSettings, txSettings)
+                cnr = snrCalc.cnr_straight
+                codeSD = sqrt(((4 * 1) / (2*cnr))) * 293     # Simple model, allow replacement of model :)
+                phaseSD =sqrt((receiverSettings.trackingLoopBandwidth / cnr) *
+                    (1+ (1/ ( 2*cnr * receiverSettings.predetectionIntegrationInterval )))) * (wavelength/(2*pi))
+                codeError = randn() * codeSD  # Error within receiver system, dependent on SNR
+                phaseError = randn() * phaseSD  # Error within receiver system, dependent on C/N0
+            else
+                codeError = 0.0
+                phaseError = 0.0
+            end
 
-            #Simulate Code measurement
-            codeError = randn() * codeSD  # Error within receiver system, dependent on SNR
                 # Neglecting transmitter clock error and relativistic effect -> will be largely recovered
             if lighttimeEffect# Please use this and apply the light time effect :)
                 codes[prn] = (receiverTime - transmitter.transmissionTime) * lightConst + codeError
             else
+                range = norm(globalPosition(receiverOrbit, inertialTime) .- transmitter.pos)
                 # Unrealistically neglecting light time effect, which really shouldnt be neglected
-                codes[prn] = norm(globalPosition(receiverOrbit, inertialTime) .- transmitter.pos) + codeError
+                codes[prn] = range + codeError
             end
 
-            phaseError = randn() * phaseSD  # Error within receiver system, dependent on C/N0
+
             #Simulate Phase measurement
             if lighttimeEffect
                 # Please use this and apply the light time effect :)
@@ -391,7 +397,9 @@ function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiv
             else
                 # Unrealistically neglecting light time effect, which really shouldnt be neglected
                 phases[prn] = wavelength * (receiverSettings.zero_phase + freq*(receiverTime) -
-                    transmitterSettings[prn].zero_phase - freq * (inertialTime)) + phaseError
+                    transmitterSettings[prn].zero_phase - freq * (inertialTime - range / lightConst)) + phaseError
+
+
             end
                 # Receiver Clock bias is taken into receiverTime.
                 # Assuming no transmitter clock bias is present
@@ -407,7 +415,7 @@ end
 
 # Simulate measurements at sequential times
 function simulateMeasurements(inertialTime::Array{<:Number}, receiverTime::Array{<:Number}, receiverOrbit::Orbit, navcon::Orbit,
-    receiverSettings::RangeReceiverSettings, transmitterSettings::Array{RangeTransmitterSettings,1}; lighttimeEffect = true)
+    receiverSettings::RangeReceiverSettings, transmitterSettings::Array{RangeTransmitterSettings,1}; lighttimeEffect = true, addNoise=true)
     #Raise error if number of measurements is not clear
     if (length(inertialTime) != length(receiverTime))
         error("simulateMeasurements: Number of true times not equal to number of receiver times")
@@ -424,7 +432,8 @@ function simulateMeasurements(inertialTime::Array{<:Number}, receiverTime::Array
                     receiverTime[epoch],
                     receiverOrbit, navcon,
                     receiverSettings, transmitterSettings;
-                    lighttimeEffect = lighttimeEffect)
+                    lighttimeEffect = lighttimeEffect,
+                    addNoise = addNoise)
         codeObs[epoch, :] = msrmt.code
         phaseObs[epoch, :] = msrmt.phase
         availability[epoch, :] = msrmt.avail
@@ -443,6 +452,7 @@ function txPointing_PECMEO(satellitePosition, t)
     return pointingVector
 end
 
+Random.seed!(0)
 operatingFrequency = 1574.42e6
 recSettings = RangeReceiverSettings( 0.0, 513.0, 2e6, 15, 20e-3, operatingFrequency, recGain,
     recPointing, 0.0)
@@ -450,7 +460,7 @@ nSats = size(navcon)
 txSettings = [RangeTransmitterSettings( rand(Float64), 300.0, operatingFrequency, txGain,
     txPointing_PECMEO, 0.0) for prn in 1:nSats]
 
-measurements = 5.0:50.2:10000.0
+measurements = 5.0:12.2:2500
 # measurements = 0.0:30.0:2880
 results = rk4(clockODE, 10000, [0.0, 0.0], 10)
 inter = rk4measurementFinder(clockODE, measurements, 0.0, 1.0; interParam=2)
@@ -459,7 +469,9 @@ localReceiverMeasurementTimes = inter.y[1, :]   # local time progression during 
 receiverClockMeasurementTimes = inter.y[2, :]   # Time on receiver clock during measurements. Includes clock freq correction (and clock errors).
 transmitter = transmitterFinder(inter.t[1], globalPosition(receiverOrbit, inter.t[1]), navcon[1])
 singleMeasurement = simulateMeasurements(inter.t[20], inter.y[2, 20], moonSat, navcon, recSettings, txSettings)
-allMeasurements = simulateMeasurements(inter.t, inter.y[2,:], moonSat, navcon, recSettings, txSettings; lighttimeEffect = false)
+Random.seed!(1)
+allMeasurements = simulateMeasurements(inter.t, inter.y[2,:], moonSat, navcon, recSettings, txSettings;
+    lighttimeEffect = false, addNoise=false)
 
 trueOffset = results.y[1,:]- results.t
 clockOffset= results.y[2,:]- results.t
@@ -477,15 +489,18 @@ plot!(inter.t / 3600, inter.y[2,:]-measurements, label="Numerical measurement ti
 
 # Find true satellite positions
 correct_positions = [globalPosition(moonSat, trueMeasurementTimes[i]) for i in 1:length(measurements)]
-
 # Example position estimation
 example_navconEphemeres = [trueKeplerEphemeris([0, 7200, 14400], navcon[i]) for i in 1:size(navcon)]
+example_navconEphemeres = [noisyKeplerEphemeris([0, 7200, 14400], navcon[i], KeplerEphemerisSD(0.03, 0.0, 0.0, 0.0, 0.0, 0.0)) for i in 1:size(navcon)]
 example_measurementEpochs = allMeasurements.timeStamp
 example_pseudoRanges = allMeasurements.codeObs
+example_phases = allMeasurements.phaseObs
 example_availability = allMeasurements.availability
+
+#Point positioning
 ppApriori = vcat([vcat([j for j in bodyPosition(moon, allMeasurements.timeStamp[i])], 0.0)' for i in 1:length(measurements)]...)
 ppesti = sequentialPointPosition(example_measurementEpochs, example_navconEphemeres, example_pseudoRanges, example_availability;
-aprioriEstimations = ppApriori, maxIter = 100, lighttimeCorrection = false)
+    aprioriEstimations = ppApriori, maxIter = 100, lighttimeCorrection = false)
 
 # Calculate errors of navigation solutions
 ppxyzErrors = [correct_positions[i] .- ppesti.estimation[i][1:3] for i in 1:length(measurements)]
@@ -493,4 +508,22 @@ ppPosErrors = [norm(correct_positions[i] .- ppesti.estimation[i][1:3]) for i in 
 ppMeanAcc = sum(ppPosErrors[ppesti.resultValidity]) / length(ppPosErrors[ppesti.resultValidity])
 print("\n PointPosi error: \t", ppMeanAcc)
 
-p3 = plot(example_measurementEpochs/3600, ppPosErrors, yaxis=("Point Position Error", (0, 2.7e4)))
+p3 = plot(example_measurementEpochs, ppPosErrors, yaxis=("Point Position Error", (0, 2.7e4)))
+
+#Kinematic positioning
+kinEstim = kinematicEstimation(example_navconEphemeres, trueMeasurementTimes[ppesti.resultValidity], example_pseudoRanges[ppesti.resultValidity, :], example_phases[ppesti.resultValidity, :], example_availability[ppesti.resultValidity, :];
+    ppApriori = ppApriori[ppesti.resultValidity, :], maxIter_pp=100, maxIter_kin = 5,
+    codeWeight = 1.0, phaseWeight = 1.0e6)
+
+kinPosTime = kinEstim.positionTimeEstimation
+kinBias = kinEstim.biasEstimation
+kinPosErrors = [norm(correct_positions[e] .- kinPosTime[e][1:3]) for e in 1:length(kinPosTime)]
+kinMeanAcc = sum(kinPosErrors) /  length(kinPosErrors)
+print("\n Kinematic Position error: \t", kinMeanAcc)
+p4 = plot(kinEstim.kinTimes/3600, kinPosErrors, yaxis=("Kinematic Error", (0, 2.7e4)))
+
+
+x = [kinPosTime[i][1] for i in 1:length(kinPosTime)]
+y = [kinPosTime[i][2] for i in 1:length(kinPosTime)]
+z = [kinPosTime[i][3] for i in 1:length(kinPosTime)];
+p5 = plot3d(x, y, z, w=3.0)
