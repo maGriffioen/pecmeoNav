@@ -81,7 +81,7 @@ function findNavPDOP(
     los = hasLineOfSight(refPoint, constelData, bodyPosition(earth, 0), earth.radius)
     PDOP = 1e9   #If gdop cannot be calculated (too little satellites or bad geometry)
     try
-        global mat_Q = findNavCovmat(refPoint, constelData[los])
+        mat_Q = findNavCovmat(refPoint, constelData[los])
         PDOP = sqrt(sum(diag(mat_Q)[1:3]))   #Calculate gdop
     catch
     end
@@ -259,21 +259,21 @@ end
 # Perform the entire kinematic estmiation
 function kinematicEstimation(navigationEphemeris::Array{<:Ephemeris}, epochTimes,
    rangeData, phaseData, availability;
-   ppApriori = [0], maxIter::Number = 5, correctionLimit::Number = 1e-8, maxIter_pp = 20,
+   ppApriori = [0], maxIter_kin::Int = 5, correctionLimit::Number = 1e-8, maxIter_pp::Int = 20,
    codeWeight = 1, phaseWeight = 1e6)
 
    n_epochs = length(epochTimes)    #Number of epochs
    # Create apriori position and clock error estimation through point positioning
-   global ppesti = sequentialPointPosition(epochTimes, navigationEphemeris, rangeData, availability;
+   ppesti = sequentialPointPosition(epochTimes, navigationEphemeris, rangeData, availability;
     aprioriEstimations = ppApriori, maxIter=maxIter_pp, correctionLimit = 1e-3).estimation
-   global apriPosTime = vcat(map(x-> collect(ppesti[x]), 1:n_epochs)...)  #apriori position and time are those from point positioning
+   apriPosTime = vcat(map(x-> collect(ppesti[x]), 1:n_epochs)...)  #apriori position and time are those from point positioning
 
    kinEstim = apriPosTime  #Dont add bias estimation -> The kinematic iterator adds those dynamically when needed
    iter = 0
    correction = correctionLimit * 10   #Ensure the iterations are started
 
    # Perform iterate the kinematic estimation
-   while (iter < maxIter && correction > correctionLimit)
+   while (iter < maxIter_kin && correction > correctionLimit)
       # Perform single iteration
       kinIter = kinematicIter(navigationEphemeris, epochTimes, kinEstim,
          rangeData, phaseData, availability;
@@ -291,7 +291,7 @@ function kinematicEstimation(navigationEphemeris::Array{<:Ephemeris}, epochTimes
 
 
    return (positionTimeEstimation = positionTimeEstim, biasEstimation = biasEstim,
-      iterations = iter, lastCorrection = correction)
+      iterations = iter, lastCorrection = correction, kinTimes = epochTimes)
 end
 
 
