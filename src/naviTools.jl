@@ -172,7 +172,6 @@ function pointPositionIteration(aPriEst, rangeData, navconPos::Array{Tup3d, 1}, 
 end
 
 # Perform a single point position estimation iteration based on constellation Ephemeris
-# TODO:: add lighttime correction
 function pointPositionIteration(aPriEst, rangeData, navigationEphemeris::Array{<:Ephemeris}, epochTime; lighttimeCorrection = true)
 
     nNavsat = length(navigationEphemeris)
@@ -259,25 +258,27 @@ end
 # Perform the entire kinematic estmiation
 function kinematicEstimation(navigationEphemeris::Array{<:Ephemeris}, epochTimes,
    rangeData, phaseData, availability;
-   ppApriori = [0], maxIter_kin::Int = 5, correctionLimit::Number = 1e-8, maxIter_pp::Int = 20,
-   codeWeight = 1, phaseWeight = 1e6)
+   ppApriori = [0], maxIter_kin::Int = 5, correctionLimit_kin::Number = 1e-8, maxIter_pp::Int = 20, correctionLimit_pp::Number = 1.0,
+   codeWeight = 1, phaseWeight = 1e6, lighttimeCorrection = true)
 
    n_epochs = length(epochTimes)    #Number of epochs
    # Create apriori position and clock error estimation through point positioning
    ppesti = sequentialPointPosition(epochTimes, navigationEphemeris, rangeData, availability;
-    aprioriEstimations = ppApriori, maxIter=maxIter_pp, correctionLimit = 1e-3).estimation
+    aprioriEstimations = ppApriori, maxIter=maxIter_pp, correctionLimit = correctionLimit_pp,
+    lighttimeCorrection = lighttimeCorrection).estimation
    apriPosTime = vcat(map(x-> collect(ppesti[x]), 1:n_epochs)...)  #apriori position and time are those from point positioning
 
    kinEstim = apriPosTime  #Dont add bias estimation -> The kinematic iterator adds those dynamically when needed
    iter = 0
-   correction = correctionLimit * 10   #Ensure the iterations are started
+   correction = correctionLimit_kin * 10   #Ensure the iterations are started
 
    # Perform iterate the kinematic estimation
-   while (iter < maxIter_kin && correction > correctionLimit)
+   while (iter < maxIter_kin && correction > correctionLimit_kin)
       # Perform single iteration
       kinIter = kinematicIter(navigationEphemeris, epochTimes, kinEstim,
          rangeData, phaseData, availability;
-         codeWeight = codeWeight, phaseWeight = phaseWeight)
+         codeWeight = codeWeight, phaseWeight = phaseWeight,
+         lighttimeCorrection = lighttimeCorrection)
       kinEstim = kinIter.estimation                   #Apply estimation
       correction = maximum(abs.(kinIter.correction))  #Check the maximum correction
       iter += 1
@@ -298,7 +299,7 @@ end
 # Perform a single iteration of kinematic estimation of satellite position, clock errors and bias
 function kinematicIter(navigationEphemeris::Array{<:Ephemeris}, epochTimes,
    aPriEst_c::Array{Float64, 1}, rangeData, phaseData, availability;
-   codeWeight = 1.0, phaseWeight = 1e6)
+   codeWeight = 1.0, phaseWeight = 1e6, lighttimeCorrection = true)
 
    avail = availability
    n_epochs = size(avail, 1)
@@ -347,12 +348,16 @@ function kinematicIter(navigationEphemeris::Array{<:Ephemeris}, epochTimes,
    rowIter = 1
    #Loop over all epochs
    for epoch in 1:n_epochs
-      gpspos_e = [globalPosition(navigationEphemeris[i], epochTimes[epoch]) for i in 1:length(navigationEphemeris)] #navigation constellation positions
-      apri_e = aPriEst_c[4*epoch-3:4*epoch]   #apriori pos en t estimation for this epoch
+      apri_e = aPriEst_c[4*epoch-3:4*epoch]   #apriori pos and time estimation for this epoch
+      if (lighttimeCorrection)
+          navconPos_e = [transmitterFinder(epochTimes[epoch], Tuple(apri_e[1:3]), KeplerOrbit(navigationEphemeris[prn], epochTimes[epoch])).pos for prn in 1:n_sats]
+      else
+          navconPos_e = [globalPosition(navigationEphemeris[i], epochTimes[epoch]) for i in 1:length(navigationEphemeris)] #navigation constellation positions
+      end
 
       #Loop over available satellites
       for prn in prns[avail[epoch, :]]
-         navsatpos = gpspos_e[prn]
+         navsatpos = navconPos_e[prn]
          posdiff = apri_e[1:3].- collect(navsatpos)
          r = norm(posdiff) #Geometric range
          sats_uvec = posdiff/r
