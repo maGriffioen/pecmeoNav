@@ -1,5 +1,5 @@
 using Plots, LinearAlgebra, Random
-gr()
+plotly()
 include("../src/NaviSimu_lessModule.jl")
 # using Main.NaviSimu
 
@@ -328,6 +328,8 @@ function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiv
     nsats = size(navcon)                        #Navigation constellation size
     codes = Array{Float64, 1}(undef, nsats)
     phases = Array{Float64, 1}(undef, nsats)
+    codeSDs = Array{Float64, 1}(undef, nsats)
+    phaseSDs = Array{Float64, 1}(undef, nsats)
     avail = BitArray(undef, nsats)
 
     #Loop over navigation satellites for this epoch
@@ -378,6 +380,8 @@ function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiv
                 codeError = 0.0
                 phaseError = 0.0
             end
+            codeSDs[prn] = codeSD
+            phaseSDs[prn] = phaseSD
 
                 # Neglecting transmitter clock error and relativistic effect -> will be largely recovered
             if lighttimeEffect# Please use this and apply the light time effect :)
@@ -408,9 +412,11 @@ function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiv
             # No measurement taken
             codes[prn] = NaN64
             phases[prn] = NaN64
+            codeSDs[prn] = 0.0
+            phaseSDs[prn] = 0.0
         end
     end
-    return (code = codes, phase = phases, avail = avail, timeStamp = receiverTime)
+    return (code = codes, phase = phases, avail = avail, timeStamp = receiverTime, codeSD = codeSDs, phaseSD = phaseSDs)
 end
 
 # Simulate measurements at sequential times
@@ -425,6 +431,8 @@ function simulateMeasurements(inertialTime::Array{<:Number}, receiverTime::Array
     nsats = size(navcon) #Total number of satellites in the navigation constellation
     codeObs = Array{Float64}(undef, nepochs, nsats)    #Per-epoch, per-prn code observation
     phaseObs = Array{Float64}(undef, nepochs, nsats)   #Per-epoch, per-prn phase observation
+    codeSD = Array{Float64}(undef, nepochs, nsats)
+    phaseSD = Array{Float64}(undef, nepochs, nsats)
     availability = BitArray(undef, nepochs, nsats)     #Per-epoch, per-prn availability boolean
 
     for epoch = 1:nepochs
@@ -436,10 +444,12 @@ function simulateMeasurements(inertialTime::Array{<:Number}, receiverTime::Array
                     addNoise = addNoise)
         codeObs[epoch, :] = msrmt.code
         phaseObs[epoch, :] = msrmt.phase
+        codeSD[epoch, :] = msrmt.codeSD
+        phaseSD[epoch, :] = msrmt.phaseSD
         availability[epoch, :] = msrmt.avail
     end
 
-    return (codeObs = codeObs, phaseObs = phaseObs, availability = availability, timeStamp = receiverTime)
+    return (codeObs = codeObs, phaseObs = phaseObs, availability = availability, timeStamp = receiverTime, codeSD=codeSD, phaseSD=phaseSD)
 end
 
 recGain(theta, phi) = 0.0
@@ -460,7 +470,10 @@ nSats = size(navcon)
 txSettings = [RangeTransmitterSettings( rand(Float64), 300.0, operatingFrequency, txGain,
     txPointing_PECMEO, 0.0) for prn in 1:nSats]
 
-measurements = 5.0:12.2:2500
+lte = true
+noise = true
+
+measurements = 20.0:20:3600
 # measurements = 0.0:30.0:2880
 results = rk4(clockODE, 10000, [0.0, 0.0], 10)
 inter = rk4measurementFinder(clockODE, measurements, 0.0, 1.0; interParam=2)
@@ -471,7 +484,7 @@ transmitter = transmitterFinder(inter.t[1], globalPosition(receiverOrbit, inter.
 singleMeasurement = simulateMeasurements(inter.t[20], inter.y[2, 20], moonSat, navcon, recSettings, txSettings)
 Random.seed!(1)
 allMeasurements = simulateMeasurements(inter.t, inter.y[2,:], moonSat, navcon, recSettings, txSettings;
-    lighttimeEffect = false, addNoise=false)
+    lighttimeEffect = lte, addNoise=noise)
 
 trueOffset = results.y[1,:]- results.t
 clockOffset= results.y[2,:]- results.t
@@ -489,9 +502,13 @@ plot!(inter.t / 3600, inter.y[2,:]-measurements, label="Numerical measurement ti
 
 # Find true satellite positions
 correct_positions = [globalPosition(moonSat, trueMeasurementTimes[i]) for i in 1:length(measurements)]
+gdop = [findNavGDOP(correct_positions[i], globalPosition(navcon, trueMeasurementTimes[i])) for i in 1:length(measurements)]
+pdop = [findNavPDOP(correct_positions[i], globalPosition(navcon, trueMeasurementTimes[i])) for i in 1:length(measurements)]
+p_dop = plot(trueMeasurementTimes/3600, gdop, label="GDOP")
+plot!(trueMeasurementTimes/3600, pdop, label="PDOP")
 # Example position estimation
-example_navconEphemeres = [trueKeplerEphemeris([0, 7200, 14400], navcon[i]) for i in 1:size(navcon)]
-example_navconEphemeres = [noisyKeplerEphemeris([0, 7200, 14400], navcon[i], KeplerEphemerisSD(0.03, 0.0, 0.0, 0.0, 0.0, 0.0)) for i in 1:size(navcon)]
+example_navconEphemeres = [trueKeplerEphemeris([0, 1800, 3600, 5400], navcon[i]) for i in 1:size(navcon)]
+example_navconEphemeres = [noisyKeplerEphemeris([0, 1800, 3600, 5400], navcon[i], KeplerEphemerisSD(0.03, 0.0, 0.0, 0.0, 0.0, 0.0)) for i in 1:size(navcon)]
 example_measurementEpochs = allMeasurements.timeStamp
 example_pseudoRanges = allMeasurements.codeObs
 example_phases = allMeasurements.phaseObs
@@ -500,7 +517,7 @@ example_availability = allMeasurements.availability
 #Point positioning
 ppApriori = vcat([vcat([j for j in bodyPosition(moon, allMeasurements.timeStamp[i])], 0.0)' for i in 1:length(measurements)]...)
 ppesti = sequentialPointPosition(example_measurementEpochs, example_navconEphemeres, example_pseudoRanges, example_availability;
-    aprioriEstimations = ppApriori, maxIter = 100, lighttimeCorrection = false)
+    aprioriEstimations = ppApriori, maxIter = 100, lighttimeCorrection = lte)
 
 # Calculate errors of navigation solutions
 ppxyzErrors = [correct_positions[i] .- ppesti.estimation[i][1:3] for i in 1:length(measurements)]
@@ -508,22 +525,43 @@ ppPosErrors = [norm(correct_positions[i] .- ppesti.estimation[i][1:3]) for i in 
 ppMeanAcc = sum(ppPosErrors[ppesti.resultValidity]) / length(ppPosErrors[ppesti.resultValidity])
 print("\n PointPosi error: \t", ppMeanAcc)
 
-p3 = plot(example_measurementEpochs, ppPosErrors, yaxis=("Point Position Error", (0, 2.7e4)))
+p3 = plot(example_measurementEpochs/3600, ppPosErrors, yaxis=("Point Position Error", (0, 2.7e4)))
 
 #Kinematic positioning
-kinEstim = kinematicEstimation(example_navconEphemeres, trueMeasurementTimes[ppesti.resultValidity], example_pseudoRanges[ppesti.resultValidity, :], example_phases[ppesti.resultValidity, :], example_availability[ppesti.resultValidity, :];
-    ppApriori = ppApriori[ppesti.resultValidity, :], maxIter_pp=100, maxIter_kin = 5,
-    codeWeight = 1.0, phaseWeight = 1.0e6)
+@time kinEstim = kinematicEstimation(example_navconEphemeres, trueMeasurementTimes[ppesti.resultValidity], example_pseudoRanges[ppesti.resultValidity, :], example_phases[ppesti.resultValidity, :], example_availability[ppesti.resultValidity, :];
+    ppApriori = ppApriori[ppesti.resultValidity, :], maxIter_pp=20, maxIter_kin = 5,
+    codeWeight = 1.0, phaseWeight = 1.0e6, correctionLimit_kin = 1e-3,
+    lighttimeCorrection = lte)
 
 kinPosTime = kinEstim.positionTimeEstimation
 kinBias = kinEstim.biasEstimation
 kinPosErrors = [norm(correct_positions[e] .- kinPosTime[e][1:3]) for e in 1:length(kinPosTime)]
 kinMeanAcc = sum(kinPosErrors) /  length(kinPosErrors)
 print("\n Kinematic Position error: \t", kinMeanAcc)
-p4 = plot(kinEstim.kinTimes/3600, kinPosErrors, yaxis=("Kinematic Error", (0, 2.7e4)))
+p4 = plot(kinEstim.kinTimes/3600, kinPosErrors, yaxis=("Kinematic Error", (0, 15)))
+
+moon_pos = [bodyPosition(moon, t) for t in trueMeasurementTimes]
+x1 = moon_pos[1][1] *0
+y1 = moon_pos[2][2] *0
+z1 = moon_pos[3][3] *0
+xm = [moon_pos[i][1] for i in 1:length(moon_pos)] .- x1
+ym = [moon_pos[i][2] for i in 1:length(moon_pos)] .- y1
+zm = [moon_pos[i][3] for i in 1:length(moon_pos)] .- z1
+x = [correct_positions[i][1] for i in 1:length(correct_positions)] .-x1
+y = [correct_positions[i][2] for i in 1:length(correct_positions)] .-y1
+z = [correct_positions[i][3] for i in 1:length(correct_positions)] .-z1
+
+x_k = [kinPosTime[i][1] for i in 1:length(kinPosTime)] .-x1
+y_k = [kinPosTime[i][2] for i in 1:length(kinPosTime)] .-y1
+z_k = [kinPosTime[i][3] for i in 1:length(kinPosTime)] .-z1
+x_p = [ppesti.estimation[i][1] for i in 1:length(ppesti.estimation)] .-x1
+y_p = [ppesti.estimation[i][2] for i in 1:length(ppesti.estimation)] .-y1
+z_p = [ppesti.estimation[i][3] for i in 1:length(ppesti.estimation)] .-z1
 
 
-x = [kinPosTime[i][1] for i in 1:length(kinPosTime)]
-y = [kinPosTime[i][2] for i in 1:length(kinPosTime)]
-z = [kinPosTime[i][3] for i in 1:length(kinPosTime)];
-p5 = plot3d(x, y, z, w=3.0)
+p5 = plot3d(x_k, y_k, z_k, w=1.0, label="Kinematic")
+plot3d!(x_p, y_p, z_p, w=1.0, label="Point pos")
+plot3d!(x, y, z, line=(1.0, :dot), label ="True trajectory")
+plot3d!(xm, ym, zm, label="Moon trajectory", w=5.0)
+# plotLineSphere(earth.radius*1e3, 24; center=(-x1, -y1, -z1))
+# plot3d!(xlims = (-4e8, 4e8), ylims = (-4e8, 4e8), zlims = (-4e8, 4e8))
