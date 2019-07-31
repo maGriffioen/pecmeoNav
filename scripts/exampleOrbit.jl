@@ -1,4 +1,4 @@
-using Plots, ProgressMeter, LinearAlgebra, Random, DoubleFloats
+using Plots, ProgressMeter, LinearAlgebra, Random#, DoubleFloats
 include("../src/NaviSimu_lessModule.jl")
 # using Main.NaviSimu
 
@@ -109,7 +109,7 @@ ppPosErrors = [norm(truePositions[i] .- ppesti[i][1:3]) for i in 1:nepochs]
 
 ### Kinematic estimation
 @time kinEstim = kinematicEstimation(navconEphemeres, timevec, pseudoRanges, phaseLens, availability;
-    ppApriori = ppApriori, maxIter_pp=100, maxIter = 5, codeWeight = 1.0, phaseWeight = 1e6)
+    ppApriori = ppApriori, maxIter_pp=100, maxIter_kin = 5, codeWeight = 1.0, phaseWeight = 1e6)
 kinPosTime = kinEstim.positionTimeEstimation
 kinBias = kinEstim.biasEstimation
 
