@@ -87,13 +87,15 @@ function pointsInFullOrbit(kepOrbit::KeplerOrbit; n = 50)
 end
 
 #Add the lines of a sphere to current plot
-function plotLineSphere(radius::Number, n::Int; color=RGB(0.306, 0.51, 0.137))
+function plotLineSphere(radius::Number, n::Int; center::Tup3d = (0.0, 0.0, 0.0), color=RGB(0.306, 0.51, 0.137))
     #Create sphere point coordinates
     sdata = sphereCoordinates(radius, n)
-
+    dx = center[1]
+    dy = center[2]
+    dz = center[3]
     for i in 1:n
-        plot!(sdata.x[i,:], sdata.y[i,:], sdata.z[i,:], w=1.0, c=color, legend=false)
-        plot!(sdata.x[:,i], sdata.y[:,i], sdata.z[:,i], w=1.0, c=color, legend=false)
+        plot!(sdata.x[i,:].+dx, sdata.y[i,:].+dy, sdata.z[i,:].+dz, w=1.0, c=color, legend=false)
+        plot!(sdata.x[:,i].+dx, sdata.y[:,i].+dy, sdata.z[:,i].+dz, w=1.0, c=color, legend=false)
     end
 end
 
