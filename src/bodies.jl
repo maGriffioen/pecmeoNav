@@ -5,7 +5,7 @@ gravConst = 6.674e-11   #m^3 kg^-1 s^-2 Lissauer, de Pater
 earth = Body(
     name = "Earth",
     gravitationalParameter =5.9724e24 * gravConst,
-    radius = 6378.1 #Equatorial radius, pessimistic case for shadowing
+    radius = 6378.1e3 # Equatorial radius, pessimistic case for shadowing
 )
 moon = Body(
     name = "Moon",
