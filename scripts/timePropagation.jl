@@ -36,6 +36,34 @@ struct RangeReceiverSettings
     pointingErrorSD::Number     #Standard deviation of pointing error in radians
 end
 
+function movingAverage(data; n=3)
+    n_max = length(data)
+    global n_diff = ((n-1)÷2)
+    if (n%2 ==1 && n_max >= n)
+        new_data = zeros(length(data))
+
+        for i in 1:n_max
+            if ( n/2 > i)
+                new_data[i] = mean([data[q] for q in 1:i+n_diff])
+            elseif (i+n_diff <= n_max)
+                new_data[i] = mean([data[q] for q in i-n_diff:i+n_diff])
+            else
+                new_data[i] = mean([data[q] for q in i-n_diff:n_max])
+            end
+        end
+
+
+    elseif (n_max>=n)
+        error("No even moving average implemented, or ")
+    else
+        error("Too little data")
+    end
+
+    return new_data
+end
+
+mean(data) = sum(data) / length(data)
+
 # # Find transmitter position and true time during transmission (Light time effect)
 # function transmitterFinder(receptionTime::Number, receiverPos::Tup3d, transmitterOrbit::Orbit)
 #     travelTime = 0.0    #Assume instant signal as first estimate
@@ -504,7 +532,7 @@ plot!(inter.t / 3600, inter.y[2,:]-measurements, label="Numerical measurement ti
 correct_positions = [globalPosition(moonSat, trueMeasurementTimes[i]) for i in 1:length(measurements)]
 gdop = [findNavGDOP(correct_positions[i], globalPosition(navcon, trueMeasurementTimes[i])) for i in 1:length(measurements)]
 pdop = [findNavPDOP(correct_positions[i], globalPosition(navcon, trueMeasurementTimes[i])) for i in 1:length(measurements)]
-p_dop = plot(trueMeasurementTimes/3600, gdop, label="GDOP")
+p_dop = plot(trueMeasurementTimes/3600, gdop, label="GDOP", yaxis="DOP [-]")
 plot!(trueMeasurementTimes/3600, pdop, label="PDOP")
 # Example position estimation
 example_navconEphemeres = [trueKeplerEphemeris([0, 1800, 3600, 5400], navcon[i]) for i in 1:size(navcon)]
@@ -525,7 +553,7 @@ ppPosErrors = [norm(correct_positions[i] .- ppesti.estimation[i][1:3]) for i in 
 ppMeanAcc = sum(ppPosErrors[ppesti.resultValidity]) / length(ppPosErrors[ppesti.resultValidity])
 print("\n PointPosi error: \t", ppMeanAcc)
 
-p3 = plot(example_measurementEpochs/3600, ppPosErrors, yaxis=("Point Position Error", (0, 2.7e4)))
+p3 = plot(example_measurementEpochs/3600, [ppPosErrors movingAverage(ppPosErrors; n=5)]./1000.0, yaxis=("Point Position Error [km]", (0, 2.7e1)), label=["Direct" "Moving Average"], w=[1.0 2.0])
 
 #Kinematic positioning
 @time kinEstim = kinematicEstimation(example_navconEphemeres, trueMeasurementTimes[ppesti.resultValidity], example_pseudoRanges[ppesti.resultValidity, :], example_phases[ppesti.resultValidity, :], example_availability[ppesti.resultValidity, :];
@@ -538,7 +566,7 @@ kinBias = kinEstim.biasEstimation
 kinPosErrors = [norm(correct_positions[e] .- kinPosTime[e][1:3]) for e in 1:length(kinPosTime)]
 kinMeanAcc = sum(kinPosErrors) /  length(kinPosErrors)
 print("\n Kinematic Position error: \t", kinMeanAcc)
-p4 = plot(kinEstim.kinTimes/3600, kinPosErrors, yaxis=("Kinematic Error", (0, 15)))
+p4 = plot(kinEstim.kinTimes/3600, [kinPosErrors movingAverage(kinPosErrors; n=5)], yaxis=("Kinematic Error [m]", (0, 12)), label=["Direct" "Moving Average"], w=[1.0 2.0])
 
 moon_pos = [bodyPosition(moon, t) for t in trueMeasurementTimes]
 x1 = moon_pos[1][1] *0
