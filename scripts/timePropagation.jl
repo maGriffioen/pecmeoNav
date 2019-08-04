@@ -501,7 +501,7 @@ txSettings = [RangeTransmitterSettings( rand(Float64), 300.0, operatingFrequency
 lte = true
 noise = true
 
-measurements = 20.0:20:3600
+measurements = 20.0:5:3600
 # measurements = 0.0:30.0:2880
 results = rk4(clockODE, 10000, [0.0, 0.0], 10)
 inter = rk4measurementFinder(clockODE, measurements, 0.0, 1.0; interParam=2)
@@ -510,7 +510,7 @@ localReceiverMeasurementTimes = inter.y[1, :]   # local time progression during 
 receiverClockMeasurementTimes = inter.y[2, :]   # Time on receiver clock during measurements. Includes clock freq correction (and clock errors).
 transmitter = transmitterFinder(inter.t[1], globalPosition(receiverOrbit, inter.t[1]), navcon[1])
 singleMeasurement = simulateMeasurements(inter.t[20], inter.y[2, 20], moonSat, navcon, recSettings, txSettings)
-Random.seed!(1)
+Random.seed!(2)
 allMeasurements = simulateMeasurements(inter.t, inter.y[2,:], moonSat, navcon, recSettings, txSettings;
     lighttimeEffect = lte, addNoise=noise)
 
@@ -535,6 +535,7 @@ pdop = [findNavPDOP(correct_positions[i], globalPosition(navcon, trueMeasurement
 p_dop = plot(trueMeasurementTimes/3600, gdop, label="GDOP", yaxis="DOP [-]")
 plot!(trueMeasurementTimes/3600, pdop, label="PDOP")
 # Example position estimation
+Random.seed!(1)
 example_navconEphemeres = [trueKeplerEphemeris([0, 1800, 3600, 5400], navcon[i]) for i in 1:size(navcon)]
 example_navconEphemeres = [noisyKeplerEphemeris([0, 1800, 3600, 5400], navcon[i], KeplerEphemerisSD(0.03, 0.0, 0.0, 0.0, 0.0, 0.0)) for i in 1:size(navcon)]
 example_measurementEpochs = allMeasurements.timeStamp
@@ -543,30 +544,30 @@ example_phases = allMeasurements.phaseObs
 example_availability = allMeasurements.availability
 
 #Point positioning
-ppApriori = vcat([vcat([j for j in bodyPosition(moon, allMeasurements.timeStamp[i])], 0.0)' for i in 1:length(measurements)]...)
-ppesti = sequentialPointPosition(example_measurementEpochs, example_navconEphemeres, example_pseudoRanges, example_availability;
-    aprioriEstimations = ppApriori, maxIter = 100, lighttimeCorrection = lte)
+pointPosition_apriori = vcat([vcat([j for j in bodyPosition(moon, allMeasurements.timeStamp[i])], 0.0)' for i in 1:length(measurements)]...)
+pointPosition_estimation = sequentialPointPosition(example_measurementEpochs, example_navconEphemeres, example_pseudoRanges, example_availability;
+    aprioriEstimations = pointPosition_apriori, maxIter = 100, lighttimeCorrection = lte)
 
 # Calculate errors of navigation solutions
-ppxyzErrors = [correct_positions[i] .- ppesti.estimation[i][1:3] for i in 1:length(measurements)]
-ppPosErrors = [norm(correct_positions[i] .- ppesti.estimation[i][1:3]) for i in 1:length(measurements)]
-ppMeanAcc = sum(ppPosErrors[ppesti.resultValidity]) / length(ppPosErrors[ppesti.resultValidity])
-print("\n PointPosi error: \t", ppMeanAcc)
+pointPosition_xyzErrors = [correct_positions[i] .- pointPosition_estimation.estimation[i][1:3] for i in 1:length(measurements)]
+pointPosition_rssErrors = [norm(correct_positions[i] .- pointPosition_estimation.estimation[i][1:3]) for i in 1:length(measurements)]
+pointPosition_meanRssError = sum(pointPosition_rssErrors[pointPosition_estimation.resultValidity]) / length(pointPosition_rssErrors[pointPosition_estimation.resultValidity])
+print("\n PointPosi error: \t", pointPosition_meanRssError)
 
-p3 = plot(example_measurementEpochs/3600, [ppPosErrors movingAverage(ppPosErrors; n=5)]./1000.0, yaxis=("Point Position Error [km]", (0, 2.7e1)), label=["Direct" "Moving Average"], w=[1.0 2.0])
+p3 = plot(example_measurementEpochs/3600, [pointPosition_rssErrors movingAverage(pointPosition_rssErrors; n=5)]./1000.0, yaxis=("Point Position Error [km]", (0, 2.7e1)), label=["Direct" "Moving Average"], w=[1.0 2.0])
 
 #Kinematic positioning
-@time kinEstim = kinematicEstimation(example_navconEphemeres, trueMeasurementTimes[ppesti.resultValidity], example_pseudoRanges[ppesti.resultValidity, :], example_phases[ppesti.resultValidity, :], example_availability[ppesti.resultValidity, :];
-    ppApriori = ppApriori[ppesti.resultValidity, :], maxIter_pp=20, maxIter_kin = 5,
+@benchmark kinEstim = kinematicEstimation(example_navconEphemeres, trueMeasurementTimes[pointPosition_estimation.resultValidity], example_pseudoRanges[pointPosition_estimation.resultValidity, :], example_phases[pointPosition_estimation.resultValidity, :], example_availability[pointPosition_estimation.resultValidity, :];
+    pointPosition_apriori = pointPosition_apriori[pointPosition_estimation.resultValidity, :], maxIter_pp=20, maxIter_kin = 5,
     codeWeight = 1.0, phaseWeight = 1.0e6, correctionLimit_kin = 1e-3,
     lighttimeCorrection = lte)
 
-kinPosTime = kinEstim.positionTimeEstimation
-kinBias = kinEstim.biasEstimation
-kinPosErrors = [norm(correct_positions[e] .- kinPosTime[e][1:3]) for e in 1:length(kinPosTime)]
-kinMeanAcc = sum(kinPosErrors) /  length(kinPosErrors)
-print("\n Kinematic Position error: \t", kinMeanAcc)
-p4 = plot(kinEstim.kinTimes/3600, [kinPosErrors movingAverage(kinPosErrors; n=5)], yaxis=("Kinematic Error [m]", (0, 12)), label=["Direct" "Moving Average"], w=[1.0 2.0])
+kinematic_positionTime = kinEstim.positionTimeEstimation
+kinematic_phaseBiases   = kinEstim.biasEstimation
+kinematic_rssErrors = [norm(correct_positions[pointPosition_estimation.resultValidity][e] .- kinematic_positionTime[e][1:3]) for e in 1:length(kinematic_positionTime)]
+kinematic_meanAccuracy = sum(kinematic_rssErrors) /  length(kinematic_rssErrors)
+print("\n Kinematic Position error: \t", kinematic_meanAccuracy)
+p4 = plot(kinEstim.kinTimes/3600, [kinematic_rssErrors movingAverage(kinematic_rssErrors; n=5)], yaxis=("Kinematic Error [m]", (0, 12)), label=["Direct" "Moving Average"], w=[1.0 2.0])
 
 moon_pos = [bodyPosition(moon, t) for t in trueMeasurementTimes]
 x1 = moon_pos[1][1] *0
@@ -579,12 +580,12 @@ x = [correct_positions[i][1] for i in 1:length(correct_positions)] .-x1
 y = [correct_positions[i][2] for i in 1:length(correct_positions)] .-y1
 z = [correct_positions[i][3] for i in 1:length(correct_positions)] .-z1
 
-x_k = [kinPosTime[i][1] for i in 1:length(kinPosTime)] .-x1
-y_k = [kinPosTime[i][2] for i in 1:length(kinPosTime)] .-y1
-z_k = [kinPosTime[i][3] for i in 1:length(kinPosTime)] .-z1
-x_p = [ppesti.estimation[i][1] for i in 1:length(ppesti.estimation)] .-x1
-y_p = [ppesti.estimation[i][2] for i in 1:length(ppesti.estimation)] .-y1
-z_p = [ppesti.estimation[i][3] for i in 1:length(ppesti.estimation)] .-z1
+x_k = [kinematic_positionTime[i][1] for i in 1:length(kinematic_positionTime)] .-x1
+y_k = [kinematic_positionTime[i][2] for i in 1:length(kinematic_positionTime)] .-y1
+z_k = [kinematic_positionTime[i][3] for i in 1:length(kinematic_positionTime)] .-z1
+x_p = [pointPosition_estimation.estimation[i][1] for i in 1:length(pointPosition_estimation.estimation)] .-x1
+y_p = [pointPosition_estimation.estimation[i][2] for i in 1:length(pointPosition_estimation.estimation)] .-y1
+z_p = [pointPosition_estimation.estimation[i][3] for i in 1:length(pointPosition_estimation.estimation)] .-z1
 
 
 p5 = plot3d(x_k, y_k, z_k, w=1.0, label="Kinematic")
