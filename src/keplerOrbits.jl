@@ -6,11 +6,12 @@ abstract type Constellation <: Orbit end
 
 struct Body
     name::String
-    gravitationalParameter::Float64
-    radius::Float64
+    gravitationalParameter::Number
+    radius::Number
+    stateFunction::Function
 end
-Body(; name = "", gravitationalParameter, radius) =
-    Body(name, gravitationalParameter, radius)
+Body(; name = "", gravitationalParameter, radius, stateFunction) =
+    Body(name, gravitationalParameter, radius, stateFunction)
 
 # Object for Kepler Orbits
 struct KeplerOrbit <: SingleOrbit
