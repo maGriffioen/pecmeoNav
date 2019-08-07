@@ -15,12 +15,12 @@ Body(; name = "", gravitationalParameter, radius, stateFunction) =
 
 # Object for Kepler Orbits
 struct KeplerOrbit <: SingleOrbit
-    a::Float64      #Semi-major axis
-    e::Float64      #Eccentricity
-    i::Float64      #Inclination
-    raan::Float64   #Right ascension of the ascending node
-    aop::Float64    #Argument of perriapsis
-    tanom::Float64  #True anomaly
+    a::Number      #Semi-major axis
+    e::Number      #Eccentricity
+    i::Number      #Inclination
+    raan::Number   #Right ascension of the ascending node
+    aop::Number    #Argument of perriapsis
+    tanom::Number  #True anomaly
     cbody::Body     #Central body of orbit
 end
 Base.copy(ko::KeplerOrbit)=
@@ -28,12 +28,12 @@ Base.copy(ko::KeplerOrbit)=
 
 # Object for Cartesian orbits (=cartesian state + gravitational parameter)
 struct CartesianOrbit <: SingleOrbit
-    x::Float64
-    y::Float64
-    z::Float64
-    vx::Float64
-    vy::Float64
-    vz::Float64
+    x::Number
+    y::Number
+    z::Number
+    vx::Number
+    vy::Number
+    vz::Number
     cbody::Body     #Central body of orbit
 end
 # Create Cartesian orbit directly from cartesian state
@@ -143,7 +143,7 @@ end
 findMeanAnomaly(ko::KeplerOrbit) = findMeanAnomaly(ko.tanom, ko.e)
 
 function meanToTrueAnomaly(meanAnomaly::Number, eccentricity::Number,
-    tolerance::Float64)
+    tolerance::Number)
 
     eccAnomaly = meanAnomaly
     delta = 1
@@ -213,7 +213,7 @@ end
 
 # Create a pecmeo constellation
 #   Polar - Polar - Equatorial
-function createCircPecmeo( radius::Float64, n_satellites::Tuple{Int, Int, Int}, cbody::Body,
+function createCircPecmeo( radius::Number, n_satellites::Tuple{Int, Int, Int}, cbody::Body,
     satSpacing::Tuple{Float64, Float64, Float64};
     initialOrbitShift::Tuple{Float64, Float64, Float64}= (0.0, 0.0, 0.0),
     equatorialRotation::Float64 = 0.0,
