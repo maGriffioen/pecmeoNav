@@ -2,6 +2,7 @@ module NaviSimu
 
 using Plots
 using LinearAlgebra
+using SparseArrays
 
 export
     Tup3d,
