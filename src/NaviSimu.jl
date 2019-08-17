@@ -62,7 +62,7 @@ export
 
     Tup3d
 
-Tup3d = Tuple{Float64, Float64, Float64}
+Tup3d = Tuple{<:Number, <:Number, <:Number}
 NaviSimuAsModule = true
 
 include("keplerOrbits.jl")

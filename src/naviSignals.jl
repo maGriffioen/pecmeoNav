@@ -82,7 +82,7 @@ function instaSignal(recPos::Tup3d, transPos::Tup3d, time::Number)
     return (code = signalTravelTime, phase = phase, los = los)
 end
 
-function instaSignal(recPos::Tup3d, transPos::Array{Tup3d}, time::Number)
+function instaSignal(recPos::Tup3d, transPos::Array{<:Tup3d}, time::Number)
     nsats = length(transPos)
     codes = Array{Float64, 1}(undef, length(transPos))
     phases = Array{Float64, 1}(undef, length(transPos))

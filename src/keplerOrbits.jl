@@ -214,10 +214,10 @@ end
 # Create a pecmeo constellation
 #   Polar - Polar - Equatorial
 function createCircPecmeo( radius::Number, n_satellites::Tuple{Int, Int, Int}, cbody::Body,
-    satSpacing::Tuple{Float64, Float64, Float64};
-    initialOrbitShift::Tuple{Float64, Float64, Float64}= (0.0, 0.0, 0.0),
-    equatorialRotation::Float64 = 0.0,
-    inclination::Float64 = 0.0 )
+    satSpacing::Tuple{<:Number, <:Number, <:Number};
+    initialOrbitShift::Tuple{<:Number, <:Number, <:Number}= (0.0, 0.0, 0.0),
+    equatorialRotation::Number = 0.0,
+    inclination::Number = 0.0 )
 
     constellation = KeplerConstellation()
     inclinations = (pi/2 + inclination, pi/2, inclination)
@@ -240,9 +240,9 @@ function createCircPecmeo( radius::Number, n_satellites::Tuple{Int, Int, Int}, c
     return constellation
 end
 
-createCircPecmeo( radius::Float64, n_satellites::Tuple{Int, Int, Int}, cbody::Body;
-    initialOrbitShift::Tuple{Float64, Float64, Float64}= (0.0, 0.0, 0.0),
-    equatorialRotation::Float64 = 0.0, inclination::Float64=0.0 )=
+createCircPecmeo( radius::Number, n_satellites::Tuple{Int, Int, Int}, cbody::Body;
+    initialOrbitShift::Tuple{<:Number, <:Number, <:Number}= (0.0, 0.0, 0.0),
+    equatorialRotation::Number = 0.0, inclination::Number=0.0 )=
     createCircPecmeo(radius, n_satellites, cbody, 2*pi ./ n_satellites;
     initialOrbitShift = initialOrbitShift,
     equatorialRotation = equatorialRotation, inclination = inclination)

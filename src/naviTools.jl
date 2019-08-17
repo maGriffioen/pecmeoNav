@@ -60,8 +60,8 @@ findPPDesignMatrix( refPoint::Tuple{Number, Number, Number},
 #Find the GDOP for reference point and constellation
 #Uses Earth position at t=0 and Earth radius for shadowing
 function findNavGDOP(
-    refPoint::Tuple{Number, Number, Number},
-    constelData::Array{Tuple{Float64, Float64, Float64}, 1} )
+    refPoint::Tup3d,
+    constelData::Array{<:Tup3d, 1} )
     los = hasLineOfSight(refPoint, constelData, bodyPosition(earth, 0), earth.radius)
     GDOP = 1e9   #If gdop cannot be calculated (too little satellites or bad geometry)
     try
@@ -72,7 +72,7 @@ function findNavGDOP(
 
     return GDOP
 end
-findNavGDOP(refPoint::Tuple{Number, Number, Number},
+findNavGDOP(refPoint::Tup3d,
     constel::KeplerConstellation) = findNavGDOP(refPoint, globalPosition(constel))
 
 function findNavPDOP(
@@ -91,10 +91,10 @@ end
 findNavPDOP(refPoint::Tuple{Number, Number, Number},
     constel::KeplerConstellation) = findNavGDOP(refPoint, globalPosition(constel))
 
-function hasLineOfSight(receiverLocation::Tuple{Float64, Float64, Float64},
-    transmitterLocation::Tuple{Float64, Float64, Float64},
-    bodyLocation::Tuple{Float64, Float64, Float64},
-    bodyRadius::Float64)
+function hasLineOfSight(receiverLocation::Tup3d,
+    transmitterLocation::Tup3d,
+    bodyLocation::Tup3d,
+    bodyRadius::Number)
 
     #Set up the vector from receiver to transmitter
     transDir = transmitterLocation .- receiverLocation
@@ -114,10 +114,10 @@ function hasLineOfSight(receiverLocation::Tuple{Float64, Float64, Float64},
     return !(isBodyInline && isBodyBetween)
 end
 
-hasLineOfSight(receiverLoc::Tuple{Float64, Float64, Float64},
-    transmitterLoc::Array{Tuple{Float64, Float64, Float64}, 1},
-    bodyLoc::Tuple{Float64, Float64, Float64},
-    bodyRadius::Float64) =
+hasLineOfSight(receiverLoc::Tup3d,
+    transmitterLoc::Array{<:Tup3d, 1},
+    bodyLoc::Tup3d,
+    bodyRadius::Number) =
     [hasLineOfSight(receiverLoc, transmitterLoc[satid], bodyLoc, bodyRadius)
         for satid in 1:size(transmitterLoc, 1)]
 

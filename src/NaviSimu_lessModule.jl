@@ -4,7 +4,7 @@ using SparseArrays
 
 
 
-Tup3d = Tuple{Float64, Float64, Float64}
+Tup3d = Tuple{<:Number, <:Number, <:Number}
 NaviSimuAsModule = false
 
 include("keplerOrbits.jl")
