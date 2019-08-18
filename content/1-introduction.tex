@@ -1,0 +1,53 @@
+\chapter{Introduction}
+\label{ch:intro}
+
+After the end of the US \textit{Apollo} program in 1972 and the end of the Soviet \textit{Luna} program in 1976, the popularity of the Moon as spaceflight destination saw a sharp decline. 
+In the decades that followed, only a handful of spacecraft entered the Lunar gravity well with the purpose to stay. However, more robotic missions have been launched to the Moon in the recent years, with many more planned. 
+Moreover, various countries, including China, India, Japan, the USA, and Russia have plans for manned missions to the moon. 
+The cherry on top of all this is the Lunar Gateway, in international effort to build a space station in Lunar orbit.
+
+\todo{Add some papers that highlight this}
+Many technological improvements since the 1970s enable these new space missions. 
+Highly efficient electric propulsion will be used for orbit maintenance on the Lunar gateway. 
+Flight computers have become much smaller and more powerful, with many CubeSats having greater processing capacity and more memory than the Apollo flight computer. 
+After the deployment of the first GPS satellites, its benefit for satellites was realized quickly as well, with Landsat-4 carrying the first GPS receiver into Low Earth Orbit. 
+This technology has been adapted for many applications such as real-time navigation, clock synchronization and post-factor orbit determination on many satellites.
+However, due to low transmission power, nadir pointing, and the large signal travel distance, orbit determination using GNSS proves difficult in Lunar orbit.
+
+This thesis proposes a new type of navigation constellation focused on the Moon, and researches the corresponding performance. 
+The subsequent section will elaborate how Lunar exploration can benefit from the GNSS technology. 
+Followed by this, the objectives and motivation for the research work are elaborated. 
+A brief overview of the Navigation Simulator tool is given. 
+This tool is developed to assess navigation accuracy.
+The chapter concludes with an outline of the content of this thesis.
+
+
+\section{Application of GNSS technology to Lunar navigaton}
+
+
+\section{Research objectives and motivation}
+
+
+\section{Overview of Navigation Simulator}
+
+
+\section{Outline}
+The concept for using a PECMEO navigation constellation are elaborated in \autoref{}.
+Based on navigation geometry, an initial optimization of the constellation, with the resulting design is presented. 
+It further concerns a framework of assumptions made for the research, and the rationale behind these assumptions. 
+Various alternatives for Lunar navigation are explained, and compared to the PECMEO navigation concept.
+
+The first step to simulating navigation measurements, is to determine reference states and clocks for both navigation satellites and the receiver.
+\autoref{} defines the reference frames worked with in this thesis. 
+Furthermore, the developed satellite state and clock propagators are shown.
+An iterative interpolation process obtains the times at which observations are performed, which is elaborated.
+
+\autoref{} elaborates on the various observations used for the navigation system.
+The Moon and Earth occasionally block the path for a signal, preventing it to reach the receiver.
+This, as well as the effect of neglecting ionospheric delayed signals is shown.
+Moreover, thermal noise on the observations will be explained, and it is shown how this effect is modeled using the link budget of the system.
+
+Measurements are combined through navigation algorithms to form a navigation solution.
+The implemented snapshot point positioning least squares and kinematic least squares are elaborated in \autoref{}
+
+Finally, \autoref{} gives the conclusions and recommendations from this research, and proposes further research.

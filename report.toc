@@ -1,0 +1,45 @@
+\select@language {english}
+\contentsline {chapter}{Preface}{iii}{chapter*.1}
+\contentsline {chapter}{Abstract}{v}{chapter*.2}
+\contentsline {chapter}{\numberline {1}Introduction}{1}{chapter.1}
+\contentsline {section}{\numberline {1.1}Application of GNSS technology to Lunar navigaton}{1}{section.1.1}
+\contentsline {section}{\numberline {1.2}Research objectives and motivation}{1}{section.1.2}
+\contentsline {section}{\numberline {1.3}Overview of Navigation Simulator}{1}{section.1.3}
+\contentsline {section}{\numberline {1.4}Outline}{1}{section.1.4}
+\contentsline {chapter}{\numberline {2}PECMEO for Lunar navigation}{3}{chapter.2}
+\contentsline {section}{\numberline {2.1}Concept for Lunar navigation constellation}{3}{section.2.1}
+\contentsline {subsection}{\numberline {2.1.1}Multiple acces}{3}{subsection.2.1.1}
+\contentsline {subsection}{\numberline {2.1.2}Usage of GNSS for ephemeris generation}{3}{subsection.2.1.2}
+\contentsline {section}{\numberline {2.2}Constellation design}{3}{section.2.2}
+\contentsline {subsection}{\numberline {2.2.1}Design space}{3}{subsection.2.2.1}
+\contentsline {subsection}{\numberline {2.2.2}Navigation geometry}{3}{subsection.2.2.2}
+\contentsline {subsection}{\numberline {2.2.3}Constellation optimization}{3}{subsection.2.2.3}
+\contentsline {section}{\numberline {2.3}Assumptions on implementation}{3}{section.2.3}
+\contentsline {subsection}{\numberline {2.3.1}Signal specifications}{3}{subsection.2.3.1}
+\contentsline {subsection}{\numberline {2.3.2}Effective isotropic radiated power}{3}{subsection.2.3.2}
+\contentsline {section}{\numberline {2.4}Navigation alternatives}{3}{section.2.4}
+\contentsline {subsection}{\numberline {2.4.1}Ground based ranging}{3}{subsection.2.4.1}
+\contentsline {subsection}{\numberline {2.4.2}Terrain relative navigation}{3}{subsection.2.4.2}
+\contentsline {chapter}{\numberline {3}Orbit simulation and clock propagation}{5}{chapter.3}
+\contentsline {section}{\numberline {3.1}Reference frame definitions}{5}{section.3.1}
+\contentsline {section}{\numberline {3.2}Satellite state propagation}{5}{section.3.2}
+\contentsline {section}{\numberline {3.3}Propagation of local time and clock of a Lunar satellite}{5}{section.3.3}
+\contentsline {section}{\numberline {3.4}Determination of measurement times}{5}{section.3.4}
+\contentsline {chapter}{\numberline {4}Ranging observations}{7}{chapter.4}
+\contentsline {section}{\numberline {4.1}Obervation types}{7}{section.4.1}
+\contentsline {subsection}{\numberline {4.1.1}Code measurements}{7}{subsection.4.1.1}
+\contentsline {subsection}{\numberline {4.1.2}Phase measurements}{7}{subsection.4.1.2}
+\contentsline {section}{\numberline {4.2}Line of sight}{7}{section.4.2}
+\contentsline {subsection}{\numberline {4.2.1}Signal blockage}{7}{subsection.4.2.1}
+\contentsline {subsection}{\numberline {4.2.2}Ionospheric measurements}{7}{subsection.4.2.2}
+\contentsline {section}{\numberline {4.3}Measurement Noise}{7}{section.4.3}
+\contentsline {subsection}{\numberline {4.3.1}Link budget}{7}{subsection.4.3.1}
+\contentsline {subsection}{\numberline {4.3.2}Relation between error and signal strength}{7}{subsection.4.3.2}
+\contentsline {chapter}{\numberline {5}Navigation algorithms}{9}{chapter.5}
+\contentsline {section}{\numberline {5.1}Point positioning}{9}{section.5.1}
+\contentsline {section}{\numberline {5.2}Kinematic least squares}{9}{section.5.2}
+\contentsline {chapter}{\numberline {6}Conclusions and Outlook}{11}{chapter.6}
+\contentsline {chapter}{\numberline {A}Universal constants and celestial properties}{13}{appendix.A}
+\contentsline {chapter}{\numberline {B}Software dependecies}{15}{appendix.B}
+\contentsline {chapter}{\numberline {C}Implementation of Kepler orbits}{17}{appendix.C}
+\contentsfinish 
