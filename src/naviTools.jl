@@ -259,7 +259,7 @@ end
 function kinematicEstimation(navigationEphemeris::Array{<:Ephemeris}, epochTimes,
    rangeData, phaseData, availability;
    ppApriori = [0], maxIter_kin::Int = 5, correctionLimit_kin::Number = 1e-8, maxIter_pp::Int = 20, correctionLimit_pp::Number = 1.0,
-   codeWeight = 1, phaseWeight = 1e6, lighttimeCorrection = true, solver=0)
+   codeWeight = 1, phaseWeight = 1e6, lighttimeCorrection = true, solver=2)
 
     n_epochs = length(epochTimes)    #Number of epochs
     prns = collect(1:size(availability)[2])
