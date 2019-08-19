@@ -20,7 +20,7 @@ iss = KeplerOrbit(6787746.891, 0.000731104,
 moonSat = KeplerOrbit(moon.radius + 100e3, 0.0,
     deg2rad(0), 0.0, 0.0, 0.0, moon)
 moonSat_p = KeplerOrbit(moon.radius + df64"100e3", df64"0.0", df64"0.0", df64"0.0", df64"0.0", df64"0.0", moon)
-KeplerOrbit(1.8381e6, 0.0, 0.0, 0.0, 0.0, 0.0, Body("Moon", 4.9027204e12, 1.7381e6, moonState))
+KeplerOrbit(1.8381e6, 0.0, 0.0, 0.0, 0.0, 0.0, moon)
 #Pecmeo after optimization run
 pecmeo_333 = createCircPecmeo(26.4e6, (3, 3, 3), earth;
     initialOrbitShift=(0.0, (2/6)*pi, (2/6)*pi),
@@ -82,7 +82,7 @@ for epoch in 1:nepochs
    append!(conPosErrors, [norm(conPos[i] .- conPos_p[i]) for i in 1:length(conPos)])
    append!(conPosErrorRSS, norm([norm(conPos[i] .- conPos_p[i]) for i in 1:length(conPos)]))
 
-   curSignals = instaSignal(truePositions[epoch], conPos, timevec[epoch])
+   curSignals = instantMeasurements(truePositions[epoch], conPos, timevec[epoch])
 
    #Store data
    codeSig[epoch, :] = curSignals.code

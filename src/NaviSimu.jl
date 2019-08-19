@@ -32,8 +32,13 @@ export
     # ephemeris.jl
     Ephemeris,
     KeplerEphemeris,
+    KeplerEphemerisSD,
     trueKeplerEphemeris,
     noisyKeplerEphemeris,
+
+    #navLink.jl
+    RangeTransmitterSettings,
+    RangeReceiverSettings,
 
     #naviTools.jl
     hasLineOfSightEarth,
@@ -45,12 +50,19 @@ export
     kinematicEstimation,
 
     #naviSignals.jl
-    transmitterFinder,
+    # transmitterFinder,
+    instantMeasurements,
+    simulateMeasurements,
 
+    #integration.jl
+    integratorRK4,
+    integration_interpolationRK4,
 
-    #naviSimu.jl
-    instaSignal,
-
+    #mathTools.jl
+    movingAverage,
+    mean,
+    lin2log,
+    log2lin,
 
 
     #io/*
@@ -68,8 +80,11 @@ NaviSimuAsModule = true
 include("keplerOrbits.jl")
 include("bodies.jl")
 include("ephemeris.jl")
+include("navLink.jl")
 include("naviTools.jl")
 include("naviSignals.jl")
+include("integration.jl")
+include("mathTools.jl")
 include("io/plotTools.jl")
 include("io/gpsData.jl")
 

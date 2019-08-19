@@ -24,7 +24,7 @@ function findSignalTravelTime(recPos::Tup3d, transmitter::KeplerOrbit, time::Num
     return (signalTravelTime = signalDistance / lightConst, transmitterPosition = transState[1:3])
 end
 
-# Find transmitter position and true time during transmission (Light time effect)
+# Find transmitter position and time of transmission (due to light time effect)
 function transmitterFinder(receptionTime::Number, receiverPos::Tup3d, transmitterOrbit::Orbit)
     travelTime = 0.0    #Assume instant signal as first estimate
     correction = 1      #Force loop to start
@@ -43,21 +43,20 @@ function transmitterFinder(receptionTime::Number, receiverPos::Tup3d, transmitte
         # Find applied correction for the decision if convergence has been reached
         correction = receptionTime - transTime - travelTime
         nIter +=1
-        # println(nIter," ", correction)
     end
-    # println(nIter)
 
     return (transmissionTime = transTime, pos = transPos, travelTime = travelTime,
         lastCorrection = correction, iterations = nIter)
 end
 
-function transmitterFinder(receptionTime::Number, receiverPos::Tup3d, transmitterEpoch::Array{<:Ephemeris})
+# function transmitterFinder(receptionTime::Number, receiverPos::Tup3d, transmitterEpoch::Array{<:Ephemeris})
+#
+#     return transmitterFinder(receptionTime, receiverPos, transmitterOrbit)
+# end
 
-    return transmitterFinder(receptionTime, receiverPos, transmitterOrbit)
-end
-
-
-function instaSignal(recPos::Tup3d, transPos::Tup3d, time::Number)
+# Calculate 'fake' measurements without lighttime effect, noise, etc.
+# Single epoch
+function instantMeasurements(recPos::Tup3d, transPos::Tup3d, time::Number)
     los = hasLineOfSightEarthMoon(recPos, transPos, time)
     if los
         #Neglect doppler shifting and relativistic effects
@@ -89,16 +88,198 @@ function instaSignal(recPos::Tup3d, transPos::Tup3d, time::Number)
     return (code = signalTravelTime, phase = phase, los = los)
 end
 
-function instaSignal(recPos::Tup3d, transPos::Array{<:Tup3d}, time::Number)
+# Calculate 'fake' measurements without lighttime effect, noise, etc.
+# Multiple epochs
+function instantMeasurements(recPos::Tup3d, transPos::Array{<:Tup3d}, time::Number)
     nsats = length(transPos)
     codes = Array{Float64, 1}(undef, length(transPos))
     phases = Array{Float64, 1}(undef, length(transPos))
     avail = BitArray(undef, length(transPos))
     for isat in 1:nsats
-        res = instaSignal(recPos, transPos[isat], time)
+        res = instantMeasurements(recPos, transPos[isat], time)
         codes[isat] = res.code
         phases[isat] = res.phase
         avail[isat] = res.los
     end
     return (code = codes, phase = phases, avail = avail)
+end
+
+
+# Simulate the measurements at a single epoch
+# Considers:
+#   Lighttime effect
+#   Signal noise due to CNR
+#   Receiver clock error (from difference inertialTime and receiverTime inputs)
+#
+# INPUT:
+#   inertialTime        Inertial (true) time when the measurements are taken
+#   receiverTime        Epoch of the measurements, as stamped by receiver clock
+#   receiverOrbit       Orbit of the recevier
+#   navcon              Orbits of the navigation constallation
+#   receiverSettings    RangeReceiverSettings object with info about the receiver
+#   transmitterSettings Array of RangeTransmitterSettings object with info about the transmitters in the constellation
+# INPUT (keyword arguments):
+#   lighttimeEffect     True to apply lighttime effect, false for no lighttime effect
+#   addNoise            True to apply random noise to measurements based on CNR
+#   writeToFile         True to write to outputFile path
+#   outputFile          Where to write the measurements to
+#
+# OUTPUT:
+#   code                Code (pseudorange) meaasurements
+#   phase               Phase measurements
+#   avail               Availability of satellite for measurements
+#   timeStamp           Timestamp (receiver time) of the measurement
+#   codeSD              Standard Deviations of the code measurement noise
+#   phaseSD             Standard Deviations of the phase measurement noise
+function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiverOrbit::Orbit, navcon::Orbit,
+    receiverSettings::RangeReceiverSettings, transmitterSettings::Array{RangeTransmitterSettings,1};
+    lighttimeEffect = true, addNoise = true, writeToFile = false, outputFile = "")
+    nsats = size(navcon)                        #Navigation constellation size
+    codes = Array{Float64, 1}(undef, nsats)
+    phases = Array{Float64, 1}(undef, nsats)
+    codeSDs = Array{Float64, 1}(undef, nsats)
+    phaseSDs = Array{Float64, 1}(undef, nsats)
+    avail = BitArray(undef, nsats)
+
+    #Loop over navigation satellites for this epoch
+    for prn in 1:nsats
+        receiverPosition = globalPosition(receiverOrbit, inertialTime)
+        if lighttimeEffect
+            # Transmitter position during transmission of received signal
+            transmitter = transmitterFinder(inertialTime, receiverPosition, navcon[prn])
+        else
+            # Transmitter position during signal reception (no light time effect)
+            transmitter = (pos = globalPosition(navcon[prn], inertialTime),
+            transmissionTime = inertialTime)
+        end
+
+        connection = true
+
+        # Determine if in shadow of Earth or Moon
+        # Check the line of sight both during reception and transmission. Assume no LOS when satellites are shadowed by body during either time.
+        losEarly = hasLineOfSightEarthMoon(receiverPosition, transmitter.pos, transmitter.transmissionTime)
+        losLate = hasLineOfSightEarthMoon(receiverPosition, transmitter.pos, inertialTime)
+        los = (losEarly && losLate)
+
+        # Check if satellites are connected and within line of sight
+        available = los && connection
+        freq = receiverSettings.frequency
+        wavelength = lightConst / freq
+
+        avail[prn] = available
+        if (available)
+            if lighttimeEffect
+                txTime = transmitter.transmissionTime
+            else
+                txTime = inertialTime
+            end
+
+            if (addNoise)
+                #Check Link budget and use SNR & C/N0 to determine error SD -> generate errors from this
+                txSettings = transmitterSettings[prn]
+                snrCalc = snrCalculation(inertialTime, receiverTime, receiverPosition, transmitter,
+                        receiverSettings, txSettings)
+                cnr = snrCalc.cnr_straight
+                codeSD = sqrt(((4 * 1) / (2*cnr))) * 293     # Simple model, allow replacement of model :)
+                phaseSD =sqrt((receiverSettings.trackingLoopBandwidth / cnr) *
+                    (1+ (1/ ( 2*cnr * receiverSettings.predetectionIntegrationInterval )))) * (wavelength/(2*pi))
+                codeError = randn() * codeSD  # Error within receiver system, dependent on SNR
+                phaseError = randn() * phaseSD  # Error within receiver system, dependent on C/N0
+            else
+                codeError = 0.0
+                phaseError = 0.0
+            end
+            codeSDs[prn] = codeSD
+            phaseSDs[prn] = phaseSD
+
+                # Neglecting transmitter clock error and relativistic effect -> will be largely recovered
+            if lighttimeEffect# Please use this and apply the light time effect :)
+                codes[prn] = (receiverTime - transmitter.transmissionTime) * lightConst + codeError
+            else
+                range = norm(globalPosition(receiverOrbit, inertialTime) .- transmitter.pos)
+                # Unrealistically neglecting light time effect, which really shouldnt be neglected
+                codes[prn] = range + codeError
+            end
+
+
+            #Simulate Phase measurement
+            if lighttimeEffect
+                # Please use this and apply the light time effect :)
+                phases[prn] = wavelength * (receiverSettings.zero_phase + freq*receiverTime -
+                    transmitterSettings[prn].zero_phase - freq * transmitter.transmissionTime) + phaseError
+            else
+                # Unrealistically neglecting light time effect, which really shouldnt be neglected
+                phases[prn] = wavelength * (receiverSettings.zero_phase + freq*(receiverTime) -
+                    transmitterSettings[prn].zero_phase - freq * (inertialTime - range / lightConst)) + phaseError
+
+
+            end
+                # Receiver Clock bias is taken into receiverTime.
+                # Assuming no transmitter clock bias is present
+                # (phi_u(t0) + f*(t-t0) + f*(clock bias u)) - (phi^s(t0) + f(t-tau-t0) + f*(clock bias s) )
+        else
+            # No measurement taken
+            codes[prn] = NaN64
+            phases[prn] = NaN64
+            codeSDs[prn] = 0.0
+            phaseSDs[prn] = 0.0
+        end
+    end
+    return (code = codes, phase = phases, avail = avail, timeStamp = receiverTime, codeSD = codeSDs, phaseSD = phaseSDs)
+end
+
+# Simulate measurements at sequential times
+# Considers:
+#   Lighttime effect
+#   Signal noise due to CNR
+#   Receiver clock error (from difference inertialTime and receiverTime inputs)
+#
+# INPUT:
+#   inertialTime        Inertial (true) times when the measurements are taken
+#   receiverTime        Epochs of the measurements, as stamped by receiver clock
+#   receiverOrbit       Orbit of the recevier
+#   navcon              Orbits of the navigation constallation
+#   receiverSettings    RangeReceiverSettings object with info about the receiver
+#   transmitterSettings Array of RangeTransmitterSettings object with info about the transmitters in the constellation
+# INPUT (keyword arguments):
+#   lighttimeEffect     True to apply lighttime effect, false for no lighttime effect
+#   addNoise            True to apply random noise to measurements based on CNR
+#
+# OUTPUT:
+#   codeObs             Code (pseudorange) meaasurements
+#   phaseObs            Phase measurements
+#   availability        Availability of satellites for measurements, per epoch, per satellite
+#   timeStamp           Timestamps (receiver time) of the measurements
+#   codeSD              Standard Deviations of the code measurement noise, per epoch, per satellite
+#   phaseSD             Standard Deviations of the phase measurement noise, per epoch, per satellite
+function simulateMeasurements(inertialTime::Array{<:Number}, receiverTime::Array{<:Number}, receiverOrbit::Orbit, navcon::Orbit,
+    receiverSettings::RangeReceiverSettings, transmitterSettings::Array{RangeTransmitterSettings,1}; lighttimeEffect = true, addNoise=true)
+    #Raise error if number of measurements is not clear
+    if (length(inertialTime) != length(receiverTime))
+        error("simulateMeasurements: Number of true times not equal to number of receiver times")
+    end
+
+    nepochs = length(inertialTime)     # Number of epochs
+    nsats = size(navcon) #Total number of satellites in the navigation constellation
+    codeObs = Array{Float64}(undef, nepochs, nsats)    #Per-epoch, per-prn code observation
+    phaseObs = Array{Float64}(undef, nepochs, nsats)   #Per-epoch, per-prn phase observation
+    codeSD = Array{Float64}(undef, nepochs, nsats)
+    phaseSD = Array{Float64}(undef, nepochs, nsats)
+    availability = BitArray(undef, nepochs, nsats)     #Per-epoch, per-prn availability boolean
+
+    for epoch = 1:nepochs
+        msrmt = simulateMeasurements(inertialTime[epoch],
+                    receiverTime[epoch],
+                    receiverOrbit, navcon,
+                    receiverSettings, transmitterSettings;
+                    lighttimeEffect = lighttimeEffect,
+                    addNoise = addNoise)
+        codeObs[epoch, :] = msrmt.code
+        phaseObs[epoch, :] = msrmt.phase
+        codeSD[epoch, :] = msrmt.codeSD
+        phaseSD[epoch, :] = msrmt.phaseSD
+        availability[epoch, :] = msrmt.avail
+    end
+
+    return (codeObs = codeObs, phaseObs = phaseObs, availability = availability, timeStamp = receiverTime, codeSD=codeSD, phaseSD=phaseSD)
 end
