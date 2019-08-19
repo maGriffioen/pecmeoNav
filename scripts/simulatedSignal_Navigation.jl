@@ -501,7 +501,7 @@ txSettings = [RangeTransmitterSettings( rand(Float64), 300.0, operatingFrequency
 lte = true
 noise = true
 
-measurements = 20.0:5:3600
+measurements = 20.0:20:3600
 # measurements = 0.0:30.0:2880
 results = rk4(clockODE, 10000, [0.0, 0.0], 10)
 inter = rk4measurementFinder(clockODE, measurements, 0.0, 1.0; interParam=2)
@@ -558,7 +558,7 @@ p3 = plot(example_measurementEpochs/3600, [pointPosition_rssErrors movingAverage
 
 #Kinematic positioning
 @benchmark kinEstim = kinematicEstimation(example_navconEphemeres, trueMeasurementTimes[pointPosition_estimation.resultValidity], example_pseudoRanges[pointPosition_estimation.resultValidity, :], example_phases[pointPosition_estimation.resultValidity, :], example_availability[pointPosition_estimation.resultValidity, :];
-    pointPosition_apriori = pointPosition_apriori[pointPosition_estimation.resultValidity, :], maxIter_pp=20, maxIter_kin = 5,
+    ppApriori = pointPosition_apriori[pointPosition_estimation.resultValidity, :], maxIter_pp=20, maxIter_kin = 5,
     codeWeight = 1.0, phaseWeight = 1.0e6, correctionLimit_kin = 1e-3,
     lighttimeCorrection = lte)
 
