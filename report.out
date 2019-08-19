@@ -6,8 +6,8 @@
 \BOOKMARK [1][-]{section.1.3}{Overview of Navigation Simulator}{chapter.1}% 6
 \BOOKMARK [1][-]{section.1.4}{Outline}{chapter.1}% 7
 \BOOKMARK [0][-]{chapter.2}{PECMEO for Lunar navigation}{}% 8
-\BOOKMARK [1][-]{section.2.1}{Concept for Lunar navigation constellation}{chapter.2}% 9
-\BOOKMARK [2][-]{subsection.2.1.1}{Multiple acces}{section.2.1}% 10
+\BOOKMARK [1][-]{section.2.1}{LuNNaC}{chapter.2}% 9
+\BOOKMARK [2][-]{subsection.2.1.1}{One-way ranging: multiple access and on-board processing}{section.2.1}% 10
 \BOOKMARK [2][-]{subsection.2.1.2}{Usage of GNSS for ephemeris generation}{section.2.1}% 11
 \BOOKMARK [1][-]{section.2.2}{Constellation design}{chapter.2}% 12
 \BOOKMARK [2][-]{subsection.2.2.1}{Design space}{section.2.2}% 13

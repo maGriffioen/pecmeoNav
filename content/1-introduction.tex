@@ -1,8 +1,10 @@
+
 \chapter{Introduction}
 \label{ch:intro}
 
-After the end of the US \textit{Apollo} program in 1972 and the end of the Soviet \textit{Luna} program in 1976, the popularity of the Moon as spaceflight destination saw a sharp decline. 
-In the decades that followed, only a handful of spacecraft entered the Lunar gravity well with the purpose to stay. However, more robotic missions have been launched to the Moon in the recent years, with many more planned. 
+After the end of the US \textit{Apollo} program in 1972 and the  the Soviet \textit{Luna} program in 1976, the popularity of the Moon as spaceflight destination saw a sharp decline. 
+In the decades that followed, only a handful of spacecraft entered the Lunar gravity well with the purpose to stay. 
+The recent years, however, once again saw numerous launches of robotic missions to the Moon, with many more planned.
 Moreover, various countries, including China, India, Japan, the USA, and Russia have plans for manned missions to the moon. 
 The cherry on top of all this is the Lunar Gateway, in international effort to build a space station in Lunar orbit.
 
@@ -10,16 +12,24 @@ The cherry on top of all this is the Lunar Gateway, in international effort to b
 Many technological improvements since the 1970s enable these new space missions. 
 Highly efficient electric propulsion will be used for orbit maintenance on the Lunar gateway. 
 Flight computers have become much smaller and more powerful, with many CubeSats having greater processing capacity and more memory than the Apollo flight computer. 
-After the deployment of the first GPS satellites, its benefit for satellites was realized quickly as well, with Landsat-4 carrying the first GPS receiver into Low Earth Orbit. 
-This technology has been adapted for many applications such as real-time navigation, clock synchronization and post-factor orbit determination on many satellites.
-However, due to low transmission power, nadir pointing, and the large signal travel distance, orbit determination using GNSS proves difficult in Lunar orbit.
 
-This thesis proposes a new type of navigation constellation focused on the Moon, and researches the corresponding performance. 
-The subsequent section will elaborate how Lunar exploration can benefit from the GNSS technology. 
-Followed by this, the objectives and motivation for the research work are elaborated. 
-A brief overview of the Navigation Simulator tool is given. 
-This tool is developed to assess navigation accuracy.
+Similarly, after the deployment of the first GPS satellites, its benefit navigation in low Earth orbit was realized quickly as well, with Landsat-4 carrying the first GPS receiver into Low Earth Orbit. 
+The low power and mass requirements for GNSS receivers, combined with their fine accuracy makes them broadly applicable.
+Furthermore, as the satellite solves the navigation solution on-board, there is no need to continuously track and upload navigation data from the ground, potentially reducing operation infrastructure complexity and cost.
+Besides real-time navigation, this technology has been adapted for clock synchronization and post-facto orbit determination on many satellites.
+However, due to its low transmission power, nadir pointing, and the large signal travel distance, orbit determination using GNSS proves difficult in Lunar orbit.
+
+
+This thesis proposes a new constellation of Earth orbiting navigation satellites to be used for in Lunar and cislunar navigation; LuNNaC, the \textit{Lunar Near-side Navigation Constellation}.
+The purpose of such a system is to reduce the cost of future Moon missions.
+Furthermore, the thesis discusses the technical performance of such a system, with a focus on navigation accuracy, in order to investigate its potential.
+
+
+The subsequent section will elaborate how Lunar exploration can benefit from the application of GNSS technology.
+Followed by this, the objectives and motivation for the research work are explicated.
+A brief overview of the NaviSimu tool, a tool for simulating navigation signals, is given. This is deemed necessary in order to provide the reader a framework of how the parts of the work are interconnected.
 The chapter concludes with an outline of the content of this thesis.
+
 
 
 \section{Application of GNSS technology to Lunar navigaton}
@@ -32,6 +42,8 @@ The chapter concludes with an outline of the content of this thesis.
 
 
 \section{Outline}
+\todo{Chapter introduction of some sort}
+
 The concept for using a PECMEO navigation constellation are elaborated in \autoref{}.
 Based on navigation geometry, an initial optimization of the constellation, with the resulting design is presented. 
 It further concerns a framework of assumptions made for the research, and the rationale behind these assumptions. 

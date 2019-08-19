@@ -1,11 +1,62 @@
 \chapter{PECMEO for Lunar navigation}
 
-\section{Concept for Lunar navigation constellation}
-\subsection{Multiple acces}
+LuNNaC is a...
+
+This chapter will introduce the LuNNaC concept, including some of the conceptual design performed for the system and its satellites.
+Firstly, the concept of the system is introduced, with an explanation on some of the design decisions on the usage of some of the fundamental technologies for the system, such as the use of one-way ranging, and the application of GNSS to the system.
+Furthermore, the constellation design, in terms of its satellite orbits, is discussed by explaining then performed geometrical optimization.
+Afterwards, a section is dedicated to presenting assumptions on system implementation. In order to correctly simulate navigation performance, many parameters specific to the satellites are used. However, none of these are known due to the novelty of the concept. Hence, the assumption on the values for these parameters is discussed.
+Finally, the LuNNaC system is compared to a number of alternative solutions for Lunar navigation, in order to see how and where LuNNaC can contribute in the current collection of solutions.
+
+\section{LuNNaC}
+\subsection{One-way ranging: multiple access and on-board processing}
+\label{sec:gnss_oneway}
+One of the major factors that enables the wide-spread use of GNSS systems is its multiple access feature, meaning that many users can use it simultaneously.
+This is achieved by making the satellites only transmit a generalized navigation signal to a broad direction.
+Determining the position of a receiver can be done directly by listing to those messages, and determining their timing, without the need for anything receiver specific or a reply.
+Therefore, a GNSS system can be used by anyone with a device capable of receiving the signals without degrading the system performance, removing the limit on the number of users.
+Whereas on Earth, every new cellphone, car or LEO satellite can determine their position using GNSS, the multiple access of LuNNaC will enable an inexpensive navigation solution for ever communication satellite, capsule or rover around or on the Moon.
+
+\begin{figure}
+\label{fig:multiaccess}
+%\includegraphics[scale=•]{multiaccess}
+\caption{Multiple access for GNSS (a) and LuNNaC (b).}
+\end{figure}
+
+This scaling is one of the opportunities of LuNNaC; although a large upfront investment is required, it will be future-proof by supporting any number of synchronous Moon mission.
+In contrast, ground station receive signals from satellites from which they determine their position.
+This quires the ground station to listen to such a satellite specifically, and therefore is not capable of tracking a large number of them in a parallel and continuous fashion.
+Hence, GNSS style one-way ranging is deemed the best ranging technique for such a system.
+
+Furthermore, GNSS techniques are based on receiving devices capable of calculating a navigation solution on-board. 
+For example, car navigation can be used without relying on external servers and/or services, by merely using the GNSS signals. 
+Therefore, one can autonomously - without using an external party - drive to their destination.
+Thus, using the GNSS one-way ranging techniques allow for a higher level of autonomy than other ranging techniques.
+
+Such autonomy is highly beneficial in Lunar spaceflight as well for three reasons:
+Firstly, less operators are needed for a highly autonomous satellite, reducing its operation cost. This will make the production of commercial infrastructure, such as Lunar communication satellites, more attractive.
+Moreover, the number of points of failure can be reduced, as the system is less dependent on external factors, and the entire chain of obtaining a navigation solution is shorter. \todo{are points 2 and 3 identical?}
+Finally, the independent return to Earth requirement for NASAs Orion capsule, as discussed in \cite{}, can be fulfilled for Lunar miss.
+With the use of LuNNaC, a Lunar mission does not require a communications link to Earth to determine its trajectory accurate enough for the return to Earth.
+Moreover, the obtained solution is not dependent on a human factor, as is the sextant currently used as independent system.
+Hence, cost of Lunar exploration can be reduced, while reliability and human safety is improved with the use of LuNNaC.
+
+
 \subsection{Usage of GNSS for ephemeris generation}
+Currently, using GNSS is one of the most accurate and reliable ways to determine the orbit of a satellite.
+Therefore, the concept for LuNNaC is to position the satellites in such an orbit, that is is capable of using the various GNSS signals for orbit determination of the satellite in the constellation.
+From this, the LuNNaC satellites can generate their ephemeres on-board in real-time, and make use of the advantages of existing GNSS by making the constellation highly autonomous and reliable.
 
 
 \section{Constellation design}
+The position of navigation satellites has a large influence on the quality of the final solution \todo{source}.
+Therefore, before any navigation performance can be determined, the orbits of the navigation satellites need to be known.
+Furthermore, although the purpose of this thesis is not to find the best possible constellation, a near-optimal constellation needs to be used for the assessment of system performance, as using a less-than optimal constellation will influence the navigation performance adversely, and therefore influences 
+suggestions on further development.
+
+Hence, an optimization of the satellite orbits within the constellation has been performed. A limited design space, using various constraints, as well as optimizing on navigation geometry rather than complete navigation accuracy reduce the complexity of the optimization.
+The former is discussed in the following section, after which the latter is discussed.
+Finally, the optimization results are discussed and the final constellation is presented.
 \subsection{Design space}
 \subsection{Navigation geometry}
 \subsection{Constellation optimization}
