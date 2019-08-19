@@ -71,8 +71,15 @@ function instaSignal(recPos::Tup3d, transPos::Tup3d, time::Number)
         #phase at t0 is 0 for receiver and transmitter
         phaseRe0 = 0
         phaseTr0 = 1e7
-        phaseRe = phaseRe0 + freq * time                       #+ clock error stuff
-        phaseTr = phaseTr0 + freq * (time - signalTravelTime) #+ clock error stuff
+        # phaseRe = phaseRe0 + freq*time
+        # phaseTr = phaseTr0 + freq * (time - signalTravelTime)
+        phaseRe = phaseRe0
+        phaseTr = phaseTr0 -freq*signalTravelTime
+        # Note that phase = phaseRe - phaseTR = phaseRe0 - phaseTr0 + freq*time - freq* (time-signalTravelTime)
+        #   = phaseRe0 - phaseTr - freq * signalTravelTime
+        #   This eliminates the time variable, the magnitude of which grows linearly with time
+        #   Hence, its truncation error grows with time, and thus the numerical error in calculating
+        #   Observations grows with time.
 
         phase = phaseRe - phaseTr #+ N + error
     else
