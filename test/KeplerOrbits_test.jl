@@ -12,14 +12,23 @@ using Main.NaviSimu, Test, DoubleFloats
     orbit_iss_kepler = KeplerOrbit(6787746.891, 0.000731104, deg2rad(51.68714486), deg2rad(127.5486706),
         deg2rad(74.21987137), deg2rad(24.1002767), earth_ocdm)
 
-    @test keplerToCartesian(orbit_iss_kepler).x ≈ orbit_iss_cartesian.x
-    @test keplerToCartesian(orbit_iss_kepler).y ≈ orbit_iss_cartesian.y
-    @test keplerToCartesian(orbit_iss_kepler).z ≈ orbit_iss_cartesian.z
-    @test keplerToCartesian(orbit_iss_kepler).vx ≈ orbit_iss_cartesian.vx
-    @test keplerToCartesian(orbit_iss_kepler).vy ≈ orbit_iss_cartesian.vy
-    @test keplerToCartesian(orbit_iss_kepler).vz ≈ orbit_iss_cartesian.vz
-    @test rad2deg(NaviSimu.findEccentricAnomaly(orbit_iss_kepler)) ≈ 24.08317766
-    @test rad2deg(NaviSimu.findMeanAnomaly(orbit_iss_kepler)) ≈ 24.06608426
+    @testset "ISS" begin
+        @test keplerToCartesian(orbit_iss_kepler).x ≈ orbit_iss_cartesian.x
+        @test keplerToCartesian(orbit_iss_kepler).y ≈ orbit_iss_cartesian.y
+        @test keplerToCartesian(orbit_iss_kepler).z ≈ orbit_iss_cartesian.z
+        @test keplerToCartesian(orbit_iss_kepler).vx ≈ orbit_iss_cartesian.vx
+        @test keplerToCartesian(orbit_iss_kepler).vy ≈ orbit_iss_cartesian.vy
+        @test keplerToCartesian(orbit_iss_kepler).vz ≈ orbit_iss_cartesian.vz
+        @test rad2deg(NaviSimu.findEccentricAnomaly(orbit_iss_kepler)) ≈ 24.08317766
+        @test rad2deg(NaviSimu.findMeanAnomaly(orbit_iss_kepler)) ≈ 24.06608426
+
+        @test cartesianToKepler(orbit_iss_cartesian).a ≈ orbit_iss_kepler.a
+        @test cartesianToKepler(orbit_iss_cartesian).e ≈ orbit_iss_kepler.e atol = 1e-8
+        @test cartesianToKepler(orbit_iss_cartesian).i ≈ orbit_iss_kepler.i
+        @test cartesianToKepler(orbit_iss_cartesian).raan ≈ orbit_iss_kepler.raan
+        @test cartesianToKepler(orbit_iss_cartesian).aop ≈ orbit_iss_kepler.aop
+        @test cartesianToKepler(orbit_iss_cartesian).tanom ≈ orbit_iss_kepler.tanom
+    end
 
     # Cryosat orbit tests
     orbit_cryosat_cartesian = CartesianOrbit(3126974.99, -6374445.74, 28673.59, -254.91197, -83.30107, 7485.70674, earth_ocdm)
