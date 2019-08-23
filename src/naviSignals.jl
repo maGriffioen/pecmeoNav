@@ -25,7 +25,8 @@ function findSignalTravelTime(recPos::Tup3d, transmitter::KeplerOrbit, time::Num
 end
 
 # Find transmitter position and time of transmission (due to light time effect)
-function transmitterFinder(receptionTime::Number, receiverPos::Tup3d, transmitterOrbit::Orbit)
+function transmitterFinder(receptionTime::Number, receiverPos::Tup3d, transmitterOrbit::Orbit;
+    maximumCorrection = 1e-14, maxIter = 10)
     travelTime = 0.0    #Assume instant signal as first estimate
     correction = 1      #Force loop to start
     transTime = receptionTime   #Initialization
@@ -33,7 +34,7 @@ function transmitterFinder(receptionTime::Number, receiverPos::Tup3d, transmitte
 
     nIter = 0   #Iteration counter
     # Iterate while no convergence of smaller than xx seconds is reached
-    while (abs(correction) > 1e-14 && nIter < 10)   #TODO: Tweak value for balance between stability and numerical accuracy
+    while (abs(correction) > maximumCorrection && nIter < maxIter)   #TODO: Tweak value for balance between stability and numerical accuracy
         # Calculate new transmitter position & time
         transTime = receptionTime - travelTime      #Time of transmission of signal
         transPos = globalPosition(transmitterOrbit, transTime)  #Position of transmitting satellite
