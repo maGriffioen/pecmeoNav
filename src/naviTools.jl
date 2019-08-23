@@ -61,8 +61,13 @@ findPPDesignMatrix( refPoint::Tuple{Number, Number, Number},
 #Uses Earth position at t=0 and Earth radius for shadowing
 function findNavGDOP(
     refPoint::Tup3d,
-    constelData::Array{<:Tup3d, 1} )
-    los = hasLineOfSight(refPoint, constelData, bodyPosition(earth, 0), earth.radius)
+    constelData::Array{<:Tup3d, 1}; checkLineOfSight = true )
+    # Check which satellites are within range
+    if checkLineOfSight
+        los = hasLineOfSight(refPoint, constelData, bodyPosition(earth, 0), earth.radius)
+    else
+        los = [true for i in 1:length(constelData)]
+    end
     GDOP = 1e9   #If gdop cannot be calculated (too little satellites or bad geometry)
     try
         mat_Q = findNavCovmat(refPoint, constelData[los])
@@ -77,8 +82,13 @@ findNavGDOP(refPoint::Tup3d,
 
 function findNavPDOP(
     refPoint::Tuple{Number, Number, Number},
-    constelData::Array{Tuple{Float64, Float64, Float64}, 1} )
-    los = hasLineOfSight(refPoint, constelData, bodyPosition(earth, 0), earth.radius)
+    constelData::Array{<:Tup3d, 1}; checkLineOfSight = true  )
+    # Check which satellites are within range
+    if checkLineOfSight
+        los = hasLineOfSight(refPoint, constelData, bodyPosition(earth, 0), earth.radius)
+    else
+        los = [true for i in 1:length(constelData)]
+    end
     PDOP = 1e9   #If gdop cannot be calculated (too little satellites or bad geometry)
     try
         mat_Q = findNavCovmat(refPoint, constelData[los])
@@ -158,7 +168,7 @@ end
 
 # Perform a single point position estimation iteration
 # TODO:: ADD lightime correction warning
-function pointPositionIteration(aPriEst, rangeData, navconPos::Array{Tup3d, 1}, epochTime; lighttimeCorrection = true)
+function pointPositionIteration(aPriEst, rangeData, navconPos::Array{<:Tup3d, 1}, epochTime; lighttimeCorrection = true)
 
     # println("Point position iteration based on static constellation coordinates")
     nNavsat = length(navconPos)
@@ -292,7 +302,7 @@ function kinematicEstimation(navigationEphemeris::Array{<:Ephemeris}, epochTimes
 
    solverFuns = [kinematicIter, kinematicIterSmartSolve]
    kinIterFun = solverFuns[solver]
-   
+
    if (verbose)
        println("Kinematic iterator function: ", kinIterFun)
    end
