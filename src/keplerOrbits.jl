@@ -113,7 +113,7 @@ function cartesianToKepler(cartesianorbit::CartesianOrbit)
     rightAscensionAscendingNode = atan(Ny / Nxy, Nx/Nxy)
     argumentOfPerigee = sign(dot(cross(N_unit, e_vec), h)) * acos(dot(e_unit, N_unit))
     trueAnomaly = sign(dot(cross(e_vec, r_vec), h)) * acos(dot(r_unit, e_unit))
-    
+
     return KeplerOrbit(a, e, i, rightAscensionAscendingNode, argumentOfPerigee, trueAnomaly, co.cbody)
 end
 
@@ -177,10 +177,8 @@ findMeanAnomaly(ko::KeplerOrbit) = findMeanAnomaly(ko.tanom, ko.e)
 
 function meanToTrueAnomaly(meanAnomaly::Number, eccentricity::Number,
     tolerance::Number)
-
     eccAnomaly = meanAnomaly
     delta = 1
-
     if (eccentricity < 0.1)
         #Simple iterative method
         #6.37-5? Astrodynamics reader
@@ -189,18 +187,16 @@ function meanToTrueAnomaly(meanAnomaly::Number, eccentricity::Number,
             delta =eccAnomalyNew - eccAnomaly
             eccAnomaly = eccAnomalyNew
         end
-
-    elseif(eccentricity < 1.0)
+    elseif (eccentricity < 1.0)
         #Newton-Raphson method
         #6.37-4? Astrodynamics reader
         while(abs(delta) > tolerance)
             eccAnomalyNew = eccAnomaly -
-            (( eccAnomaly - eccentricity * sin(eccentricAnomaly) - meanAnomaly ) /
-            ( 1- eccentricity * cos(eccentricAnomaly) ))
+            (( eccAnomaly - eccentricity * sin(eccAnomaly) - meanAnomaly ) /
+            ( 1- eccentricity * cos(eccAnomaly) ))
             delta = eccAnomalyNew - eccAnomaly
             eccAnomaly = eccAnomalyNew
         end
-
     else
         #Not solvable (I think) with non-elliptical orbits
         error("Cannot find true anomaly with hyperbolic orbit")
@@ -215,6 +211,8 @@ function meanToTrueAnomaly(meanAnomaly::Number, eccentricity::Number,
 
     return trueAnomaly
 end
+
+
 meanToTrueAnomaly(meanAnomaly::Number, eccentricity::Number) =
     meanToTrueAnomaly(meanAnomaly, eccentricity, 1e-7)
 
