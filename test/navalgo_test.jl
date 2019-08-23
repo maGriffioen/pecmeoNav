@@ -1,5 +1,5 @@
 include("../src/NaviSimu_adder.jl")
-using Main.NaviSimu, Test
+using Main.NaviSimu, Test, DoubleFloats
 
 @testset "Position Algorithms" begin
     @testset "Reader Pieter Visser" begin
@@ -47,8 +47,35 @@ using Main.NaviSimu, Test
         # Tests with kinematic algorithm
     end
 
-    @testset "Lighttime correction" begin
-        #Use SPACE to verify the function findTransmitter for lighttime effect
+    @testset "Lighttime correction SPICE test" begin
+        # Use SPACE to verify the function findTransmitter for lighttime effect
+        using SPICE
+
+        # Load SPICE Kernels
+        furnsh("test/de435.bsp")    # SPK
+        furnsh("test/naif0012.tls") # Leap seconds kernel
+
+        # Set an epoch
+        t0 = utc2et("January 01, 2000 12:00:00")
+
+        # Obtain uncorrected and corrected state
+        earthState = spkezr("EARTH_BARYCENTER", t0, "J2000", "None", "SOLAR SYSTEM BARYCENTER")
+        earthState_lt = spkezr("EARTH_BARYCENTER", t0, "J2000", "CN", "SOLAR SYSTEM BARYCENTER")
+
+        # helicentric gravitational constant, body for the solar system and earth orbit from earth state
+        hgc = df64"1.32712440042e20"
+        statefun_solar(t) = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        solarSystemBody = Body("solar system", hgc, 0.0, statefun_solar)
+        eS = [Double64(i)*1000 for i in earthState[1][1:6]]
+        keplerEarthOrbit = cartesianToKepler(CartesianOrbit(eS[1], eS[2], eS[3], eS[4], eS[5], eS[6], solarSystemBody))
+
+        # Solved lighttime correction from the library
+        transmitterEarth= NaviSimu.transmitterFinder(0.0, (0.0, 0.0, 0.0), keplerEarthOrbit; maximumCorrection=1e-20)
+
+        # Compare results from SPICE and NaviSimu library
+        @test transmitterEarth.travelTime ≈ earthState_lt[2] atol =1e-8
+        @test (earthState_lt[1]*1e3 ≈ NaviSimu.state(keplerEarthOrbit, transmitterEarth.transmissionTime)) rtol =1e-9
+        @test (earthState_lt[1][1:3]*1e3 ≈ [i for i in transmitterEarth.pos]) rtol = 1e-9
     end
 
 end
