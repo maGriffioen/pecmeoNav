@@ -38,6 +38,7 @@ struct CartesianOrbit <: SingleOrbit
 end
 # Create Cartesian orbit directly from cartesian state
 CartesianOrbit(kepOrbit::KeplerOrbit) = keplerToCartesian(kepOrbit::KeplerOrbit)
+KeplerOrbit(cartOrbit::CartesianOrbit) = cartesianToKepler(cartOrbit::CartesianOrbit)
 Base.copy(co::CartesianOrbit) =
     CartesianOrbit(co.x, co.y, co.z, co.vx, co.vy, co.vz, co.cbody)
 
@@ -82,6 +83,38 @@ function keplerToCartesian(keplerorbit::KeplerOrbit)
     vel3d = (mu / h) * transforationMatrix * [-sin(ko.tanom); (ko.e+cos(ko.tanom))];
 
     CartesianOrbit(pos3d[1], pos3d[2], pos3d[3], vel3d[1], vel3d[2], vel3d[3], ko.cbody)
+end
+
+# Transform Carthesian orbit into Kepler orbit type
+function cartesianToKepler(cartesianorbit::CartesianOrbit)
+    # Based on Noomen slides
+    co = cartesianorbit
+    r_vec = [co.x, co.y, co.z]
+    v_vec = [co.vx, co.vy, co.vz]
+    mu = co.cbody.gravitationalParameter
+    r = norm(r_vec)     # orbital radius
+    v = norm(v_vec)     # orbital velocity
+    h = cross(r_vec, v_vec) # rotational energy
+    N = cross([0, 0, 1], h)
+
+    a = 1/((2/r) - (v*v/mu))    # semi-major axis
+    e_vec = (cross(v_vec, h) / mu) - (r_vec / r)
+    e = norm(e_vec)             # eccentricity
+
+    i = acos(h[3] / norm(h))    # inclination
+
+    Nx = N[1]
+    Ny = N[2]
+    Nxy = sqrt(Nx*Nx + Ny*Ny)
+    N_unit = N / norm(N)
+    e_unit = e_vec / e
+    r_unit = r_vec / r
+    # Final Kepler elements
+    rightAscensionAscendingNode = atan(Ny / Nxy, Nx/Nxy)
+    argumentOfPerigee = sign(dot(cross(N_unit, e_vec), h)) * acos(dot(e_unit, N_unit))
+    trueAnomaly = sign(dot(cross(e_vec, r_vec), h)) * acos(dot(r_unit, e_unit))
+    
+    return KeplerOrbit(a, e, i, rightAscensionAscendingNode, argumentOfPerigee, trueAnomaly, co.cbody)
 end
 
 #Legacy positions

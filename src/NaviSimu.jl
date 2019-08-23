@@ -15,6 +15,7 @@ export
     KeplerConstellation,
     propagateKeplerOrbit,
     keplerToCartesian,
+    cartesianToKepler,
     orbitalPeriod,
     createCircPecmeo,
     localPosition,
