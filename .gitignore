@@ -4,6 +4,8 @@
 *.sp3
 *.eph
 *.drawio
+*.bsp
+*.tls
 
 /figs
 /tmp
