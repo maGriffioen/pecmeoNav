@@ -19,8 +19,7 @@ moon = Body(
 #https://ssd.jpl.nasa.gov/?sat_elem
 lunarOrbit = KeplerOrbit(0.3844e9, 0.0554, deg2rad(5.16), deg2rad(318.15), deg2rad(125.08), deg2rad(135.27) , earth)
 lightConst = 299792458          # from SPICE "IAU official value for the speed of lightin vacuo: 299792.458 km/sec."
-bolzmanConst = 1.3806e-023      # Replace me with a proper source :(
-println("Add proper bolzman constant with sources!")
+bolzmanConst = 1.380650e-023      # Fundamentals of Planetary sciences book
 
 
 
