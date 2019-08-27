@@ -61,10 +61,14 @@ findPPDesignMatrix( refPoint::Tuple{Number, Number, Number},
 #Uses Earth position at t=0 and Earth radius for shadowing
 function findNavGDOP(
     refPoint::Tup3d,
-    constelData::Array{<:Tup3d, 1}; checkLineOfSight = true )
+    constelData::Array{<:Tup3d, 1}; checkLineOfSightEarth = true, checkLOSMoon = false, time = 0 )
     # Check which satellites are within range
-    if checkLineOfSight
+    if checkLineOfSightEarth && checkLOSMoon
+        los = hasLineOfSightEarthMoon(refPoint,constelData, time)
+    elseif checkLineOfSightEarth
         los = hasLineOfSight(refPoint, constelData, bodyPosition(earth, 0), earth.radius)
+    elseif checkLOSMoon
+        los = hasLineOfSightMoon(refPoint, constelData, time)
     else
         los = [true for i in 1:length(constelData)]
     end
@@ -80,12 +84,42 @@ end
 findNavGDOP(refPoint::Tup3d,
     constel::KeplerConstellation) = findNavGDOP(refPoint, globalPosition(constel))
 
-function findNavPDOP(
-    refPoint::Tuple{Number, Number, Number},
-    constelData::Array{<:Tup3d, 1}; checkLineOfSight = true  )
+function findNavTDOP(
+    refPoint::Tup3d,
+    constelData::Array{<:Tup3d, 1}; checkLineOfSightEarth = true, checkLOSMoon = false, time = 0 )
     # Check which satellites are within range
-    if checkLineOfSight
+    if checkLineOfSightEarth && checkLOSMoon
+        los = hasLineOfSightEarthMoon(refPoint,constelData, time)
+    elseif checkLineOfSightEarth
         los = hasLineOfSight(refPoint, constelData, bodyPosition(earth, 0), earth.radius)
+    elseif checkLOSMoon
+        los = hasLineOfSightMoon(refPoint, constelData, time)
+    else
+        los = [true for i in 1:length(constelData)]
+    end
+    TDOP = 1e9   #If gdop cannot be calculated (too little satellites or bad geometry)
+    try
+        mat_Q = findNavCovmat(refPoint, constelData[los])
+        TDOP = sqrt(mat_Q[4, 4])   #Calculate gdop
+    catch
+    end
+
+    return TDOP
+end
+findNavTDOP(refPoint::Tup3d,
+    constel::KeplerConstellation) = findNavTDOP(refPoint, globalPosition(constel))
+
+
+function findNavPDOP(
+    refPoint::Tup3d,
+    constelData::Array{<:Tup3d, 1}; checkLineOfSightEarth = true, checkLOSMoon = false, time = 0 )
+    # Check which satellites are within range
+    if checkLineOfSightEarth && checkLOSMoon
+        los = hasLineOfSightEarthMoon(refPoint,constelData, time)
+    elseif checkLineOfSightEarth
+        los = hasLineOfSight(refPoint, constelData, bodyPosition(earth, 0), earth.radius)
+    elseif checkLOSMoon
+        los = hasLineOfSightMoon(refPoint, constelData, time)
     else
         los = [true for i in 1:length(constelData)]
     end
@@ -212,7 +246,6 @@ function pointPositionIteration(aPriEst, rangeData, navigationEphemeris::Array{<
     return aPriEst .+ deltaPos
 end
 
-
 # Perform batch of point position estimations for a single satellite on various epochs
 function sequentialPointPosition(epochTimes, navigationEphemeris::Array{<:Ephemeris},
     pseudoRanges, availability; aprioriEstimations = [0.0], maxIter = 10, correctionLimit = 1e-8,
@@ -265,11 +298,40 @@ function sequentialPointPosition(epochTimes, navigationEphemeris::Array{<:Epheme
     return (estimation = ppEstimation, resultValidity = estimationSuccess)
 end
 
+
+function findMeasurementArchs(availabilityMatrix)
+    # arch=0
+    inArch = false
+    archRanges = []
+    arch_startepoch = NaN
+    nEpochs = size(availabilityMatrix)[1]
+    for e in 1:nEpochs
+        nObs_curr = sum(availabilityMatrix[e,:])
+        if nObs_curr < 4 && inArch
+            inArch = false
+            push!( archRanges, arch_startepoch: e-1 )
+        elseif nObs_curr < 4 && !inArch
+
+        elseif inArch
+
+        elseif !inArch
+            inArch = true
+            # arch += 1
+            arch_startepoch = e
+        end
+    end
+    if inArch
+        push!( archRanges, arch_startepoch: nEpochs)
+    end
+
+    return archRanges
+end
+
 # Perform the entire kinematic estmiation
 function kinematicEstimation(navigationEphemeris::Array{<:Ephemeris}, epochTimes,
-   rangeData, phaseData, availability;
-   ppApriori = [0], maxIter_kin::Int = 5, correctionLimit_kin::Number = 1e-8, maxIter_pp::Int = 20, correctionLimit_pp::Number = 1.0,
-   codeWeight = 1, phaseWeight = 1e6, lighttimeCorrection = true, solver=2, verbose=false)
+    rangeData, phaseData, availability;
+    ppApriori = [0], maxIter_kin::Int = 5, correctionLimit_kin::Number = 1e-8, maxIter_pp::Int = 20, correctionLimit_pp::Number = 1.0,
+    codeWeight = 1, phaseWeight = 1e6, lighttimeCorrection = true, solver=2, verbose=false)
 
     n_epochs = length(epochTimes)    #Number of epochs
     prns = collect(1:size(availability)[2])
@@ -278,58 +340,89 @@ function kinematicEstimation(navigationEphemeris::Array{<:Ephemeris}, epochTimes
     ppesti = sequentialPointPosition(epochTimes, navigationEphemeris, rangeData, availability;
     aprioriEstimations = ppApriori, maxIter=maxIter_pp, correctionLimit = correctionLimit_pp,
     lighttimeCorrection = lighttimeCorrection).estimation
-    apriPosTime = vcat(map(x-> collect(ppesti[x]), 1:n_epochs)...)  #apriori position and time are those from point positioning
+    # apriPosTime = vcat(map(x-> collect(ppesti[x]), 1:n_epochs)...)  #apriori position and time are those from point positioning
+    # println(typeof(ppesti))
 
-
-    #Allocate bias numbers to the various satellite arcs
+    # Allocate bias numbers
     biasNumber = zeros(Int16, n_epochs, maximum(prns))
     for epoch in 1:n_epochs
-     for prn in prns[availability[epoch, :]]
-        if epoch > 1 && biasNumber[epoch-1, prn] > 0
-           #Continue using old bias if a number has been assigned in previous epoch
-           biasNumber[epoch, prn] = biasNumber[epoch-1, prn]
-        else
-           #Create new bias Number
-           biasNumber[epoch, prn] = maximum(biasNumber) + 1
+        for prn in prns[availability[epoch, :]]
+            if epoch > 1 && biasNumber[epoch-1, prn] > 0
+               #Continue using old bias if a number has been assigned in previous epoch
+               biasNumber[epoch, prn] = biasNumber[epoch-1, prn]
+            else
+               #Create new bias Number
+               biasNumber[epoch, prn] = maximum(biasNumber) + 1
+            end
         end
-     end
     end
 
-   kinEstim = apriPosTime  #Dont add bias estimation -> The kinematic iterator adds those dynamically when needed
+    # Select function for solver iterator
+    solverFuns = [kinematicIter, kinematicIterSmartSolve]
+    kinIterFun = solverFuns[solver]
 
-   iter = 0
-   correction = correctionLimit_kin * 10   #Ensure the iterations are started
+    # Output which function is used when verbose = true
+    if (verbose)
+        println("Kinematic iterator function: ", kinIterFun)
+    end
 
-   solverFuns = [kinematicIter, kinematicIterSmartSolve]
-   kinIterFun = solverFuns[solver]
+    archs = findMeasurementArchs(availability)
+    kinematic_xyztResults = copy(ppesti)
+    kinematic_biasResults = zeros(maximum(biasNumber))
+    kinematic_processed = BitArray(undef, length(epochTimes))
+    kinematic_processed .= false
+    iterations = Array{Int16, 1}(undef, length(archs))
+    corrections = Array{Float64, 1}(undef, length(archs))
 
-   if (verbose)
-       println("Kinematic iterator function: ", kinIterFun)
-   end
+    # Split into visibility archs and solev on a per-arch basis
+    for archEpochs in archs
+        if (verbose)
+            println("Processing arch with epochs: ", archEpochs)
+        end
+        availability_arch = availability[archEpochs, :]
+        nepochs_arch = length(archEpochs)
+        range_arch = rangeData[archEpochs, :]
+        phase_arch = phaseData[archEpochs, :]
+        epochTimes_arch = epochTimes[archEpochs]
+        apriPosTime_arch = vcat(map(x-> collect(ppesti[x]), archEpochs)...)
+        biasNumber_arch = biasNumber[archEpochs, :]
+        biasRange_arch = minimum(biasNumber_arch[biasNumber_arch.>0]):maximum(biasNumber_arch)
+        for i in 1:length(biasNumber_arch)
+            if biasNumber_arch[i] > 0
+                biasNumber_arch[i] -= (first(biasRange_arch)-1)
+            end
+        end
 
-   # Perform iterate the kinematic estimation
-   while (iter < maxIter_kin && correction > correctionLimit_kin)
-      # Perform single iteration
-      kinIter = kinIterFun(navigationEphemeris, epochTimes, kinEstim,
-         rangeData, phaseData, availability, biasNumber;
-         codeWeight = codeWeight, phaseWeight = phaseWeight,
-         lighttimeCorrection = lighttimeCorrection)
-      kinEstim = copy(kinIter.estimation)
-      correction = maximum(abs.(kinIter.correction))  #Check the maximum correction
-      iter += 1
-   end
+        kinematic_processed[archEpochs] .= true
 
-   # Restructure the ouput
-   positionTimeEstim = [Tuple(kinEstim[epoch*4-3 : epoch*4])
-      for epoch in 1:n_epochs]
+       kinEstim = apriPosTime_arch  #Dont add bias estimation -> The kinematic iterator adds those dynamically when needed
 
-   biasEstim = kinEstim[n_epochs*4+1 : end]
+       iter = 0
+       correction = correctionLimit_kin * 10   #Ensure the iterations are started
 
+       # Perform iterate the kinematic estimation
+       while (iter < maxIter_kin && correction > correctionLimit_kin)
+          # Perform single iteration
+          kinIter = kinIterFun(navigationEphemeris, epochTimes_arch, kinEstim,
+             range_arch, phase_arch, availability_arch, biasNumber_arch;
+             codeWeight = codeWeight, phaseWeight = phaseWeight,
+             lighttimeCorrection = lighttimeCorrection)
+          kinEstim = copy(kinIter.estimation)
+          correction = maximum(abs.(kinIter.correction))  #Check the maximum correction
+          iter += 1
+       end
 
-   return (positionTimeEstimation = positionTimeEstim, biasEstimation = biasEstim,
-      iterations = iter, lastCorrection = correction, kinTimes = epochTimes)
+       # Restructure the ouput
+       kinematic_xyztResults[archEpochs] = [Tuple(kinEstim[epoch*4-3 : epoch*4])
+          for epoch in archEpochs.-(first(archEpochs)-1)]
+
+       kinematic_biasResults[biasRange_arch] = kinEstim[nepochs_arch*4+1 : end]
+    end
+
+   return (positionTimeEstimation = kinematic_xyztResults, biasEstimation = kinematic_biasResults,
+      iterations = iterations, lastCorrection = corrections, kinTimes = epochTimes, archs = archs,
+      boolarchs = kinematic_processed)
 end
-
 
 # Perform a single iteration of kinematic estimation of satellite position, clock errors and bias
 function kinematicIter(navigationEphemeris::Array{<:Ephemeris}, epochTimes,
@@ -489,7 +582,7 @@ function kinematicIterSmartSolve(navigationEphemeris::Array{<:Ephemeris}, epochT
             Nbb[biasNumber_current, biasNumber_current] += phaseWeight
             Nxb[eRange, biasNumber_current] += -(sats_uvec) * phaseWeight
         end
-        #Inverse the lcoal Nxx for superfast inversion
+        #Inverse the lcoal Nxx for faster inversion
         Nxx_inv[eRange, eRange] = inv(Nxx_tmp) #Inverse of local N_XX 4x4 matrix
     end
 
