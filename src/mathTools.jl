@@ -2,7 +2,7 @@
 # Input:
 # Data  Input data vector
 # n::int
-function movingAverage(data; n=3<:Int)
+function movingAverage(data; n=3)
     n_max = length(data)
     global n_diff = ((n-1)÷2)
     if (n%2 ==1 && n_max >= n)
