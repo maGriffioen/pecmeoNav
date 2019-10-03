@@ -195,9 +195,10 @@ function pointPosition(ranges, navSats, epochTime; maxIter = 10, correctionLimit
         end
     else
         sufficientObervables = false
+        correction = 0.0
     end
 
-    return (estimation = Tuple(estimation), success = sufficientObervables)
+    return (estimation = Tuple(estimation), success = sufficientObervables, lastCorrection = correction, iterations = niter)
 end
 
 # Perform a single point position estimation iteration
@@ -226,11 +227,11 @@ function pointPositionIteration(aPriEst, rangeData, navigationEphemeris::Array{<
         # Find positions of navigation satellites INCLUDING lighttime effect
         # Ephemeris are those selected from measurementTime
         # navConOrbits = [KeplerOrbit(navigationEphemeris[prn], measurementTime) for prn in 1:nNavsat]
-        navconPos = [transmitterFinder(measurementTime, Tuple(aPriEst[1:3]), KeplerOrbit(navigationEphemeris[prn], measurementTime)).pos for prn in 1:nNavsat]
+        navconPos = [transmitterFinder(measurementTime-(aPriEst[4]/lightConst), Tuple(aPriEst[1:3]), KeplerOrbit(navigationEphemeris[prn], measurementTime)).pos for prn in 1:nNavsat]
     else
         # Find positions of navigation satellite at time of signal reception
         # e.g. not taking into account the light time effect
-        navconPos = [globalPosition(navigationEphemeris[prn], measurementTime) for prn in 1:nNavsat]
+        navconPos = [globalPosition(navigationEphemeris[prn], measurementTime-(aPriEst[4]/lightConst)) for prn in 1:nNavsat]
     end
 
     if length(rangeData) == 0
@@ -283,7 +284,6 @@ function sequentialPointPosition(epochTimes, navigationEphemeris::Array{<:Epheme
                     lighttimeCorrection = lighttimeCorrection)
                     for epoch in 1:n_epochs]
     else
-
         ppResult =  [pointPosition(pseudoRanges[epoch, availability[epoch, :]],
                     navigationEphemeris[availability[epoch, :]],
                     epochTimes[epoch];
@@ -294,8 +294,11 @@ function sequentialPointPosition(epochTimes, navigationEphemeris::Array{<:Epheme
     end
     ppEstimation = [i.estimation for i in ppResult]
     estimationSuccess = [i.success for i in ppResult]
+    lastCorrections = [i.lastCorrection for i in ppResult]
+    iterations = [i.iterations for i in ppResult]
 
-    return (estimation = ppEstimation, resultValidity = estimationSuccess)
+    return (estimation = ppEstimation, resultValidity = estimationSuccess,
+        lastCorrections = lastCorrections, iterations=iterations)
 end
 
 
@@ -371,8 +374,10 @@ function kinematicEstimation(navigationEphemeris::Array{<:Ephemeris}, epochTimes
     kinematic_biasResults = zeros(maximum(biasNumber))
     kinematic_processed = BitArray(undef, length(epochTimes))
     kinematic_processed .= false
-    iterations = Array{Int16, 1}(undef, length(archs))
-    corrections = Array{Float64, 1}(undef, length(archs))
+    iterations = Array{Int16, 1}(undef, 0)
+    corrections = Array{Float64, 1}(undef, 0)
+
+    variance_xyzt = zeros(n_epochs, 4)
 
     # Split into visibility archs and solev on a per-arch basis
     for archEpochs in archs
@@ -417,11 +422,27 @@ function kinematicEstimation(navigationEphemeris::Array{<:Ephemeris}, epochTimes
           for epoch in archEpochs.-(first(archEpochs)-1)]
 
        kinematic_biasResults[biasRange_arch] = kinEstim[nepochs_arch*4+1 : end]
+
+
+       kincov = kinematic_covariance(navigationEphemeris, epochTimes_arch, kinEstim,
+          range_arch, phase_arch, availability_arch, biasNumber_arch;
+          codeWeight = codeWeight, phaseWeight = phaseWeight,
+          lighttimeCorrection = lighttimeCorrection)
+
+      var_xxs = diag(kincov.cov_xx)
+      for epoch in archEpochs
+          localEpochNumber = epoch - archEpochs[1] +1
+          idx = 1+4*(localEpochNumber-1)
+          variance_xyzt[epoch, :] = [var_xxs[idx+i] for i in 0:3 ]
+      end
+
+      append!(iterations, iter)
+      append!(corrections, correction)
     end
 
    return (positionTimeEstimation = kinematic_xyztResults, biasEstimation = kinematic_biasResults,
       iterations = iterations, lastCorrection = corrections, kinTimes = epochTimes, archs = archs,
-      boolarchs = kinematic_processed)
+      boolarchs = kinematic_processed, variance_xyzt = variance_xyzt)
 end
 
 # Perform a single iteration of kinematic estimation of satellite position, clock errors and bias
@@ -551,9 +572,9 @@ function kinematicIterSmartSolve(navigationEphemeris::Array{<:Ephemeris}, epochT
     for epoch in 1:n_epochs
         apri_e = aPriEst_c[4*epoch-3:4*epoch]   #apriori pos and time estimation for this epoch
         if (lighttimeCorrection)
-          navconPos_e = [transmitterFinder(epochTimes[epoch], Tuple(apri_e[1:3]), KeplerOrbit(navigationEphemeris[prn], epochTimes[epoch])).pos for prn in 1:n_sats]
+          navconPos_e = [transmitterFinder(epochTimes[epoch]-(apri_e[4]/lightConst), Tuple(apri_e[1:3]), KeplerOrbit(navigationEphemeris[prn], epochTimes[epoch])).pos for prn in 1:n_sats]
         else
-          navconPos_e = [globalPosition(navigationEphemeris[i], epochTimes[epoch]) for i in 1:length(navigationEphemeris)] #navigation constellation positions
+          navconPos_e = [globalPosition(navigationEphemeris[i], epochTimes[epoch]-(apri_e[4]/lightConst)) for i in 1:length(navigationEphemeris)] #navigation constellation positions
         end
 
         eRange = 1+((epoch-1)*4):epoch*4
@@ -594,4 +615,90 @@ function kinematicIterSmartSolve(navigationEphemeris::Array{<:Ephemeris}, epochT
     correction = vec(vcat(deltaX, deltaB))
 
     return (correction = correction, estimation = aPriEst+correction)
+end
+
+
+function kinematic_covariance(navigationEphemeris::Array{<:Ephemeris}, epochTimes,
+   aPriEst_c::Array{Float64, 1}, rangeData, phaseData, availability, biasNumbers;
+   codeWeight = 1.0, phaseWeight = 1e6, lighttimeCorrection = true)
+
+   avail = availability
+   n_epochs = size(avail, 1)
+   n_sats = size(avail, 2)
+   n_measurements = sum(avail) *2
+   prns = collect(1:size(avail)[2])
+
+
+    n_bias = maximum(biasNumbers)  #Number of biases to be estimated
+
+    # Pre-allocate vectors and matrices
+    Nxx_inv = zeros(n_epochs*4, n_epochs*4)
+    Nxb = zeros(n_epochs*4, n_bias)
+    Nbb = zeros(n_bias, n_bias)
+    nx = zeros(n_epochs*4, 1)
+    nb = zeros(n_bias, 1)
+
+    # Dynamically grow apriori estimation vector
+    aPriEst = aPriEst_c
+    while length(aPriEst) < 4*n_epochs
+        #Risky zero-apriori estimations added to fill apriori vector.
+        aPriEst.append(0.0)
+    end
+
+    aPrioriLength = 4*n_epochs + n_bias    #'Right' apriori vector length
+    while length(aPriEst) < aPrioriLength
+        #Add (estimated) bias to grow apriori vector size
+        iAddedBias = length(aPriEst) - 4*n_epochs +1
+        dataFilter = biasNumbers.==iAddedBias
+        aPriBias = sum((rangeData[dataFilter] - phaseData[dataFilter] )) / sum(dataFilter)
+        append!(aPriEst, aPriBias)
+    end
+
+    rowIter = 1
+    #Loop over all epochs
+    for epoch in 1:n_epochs
+        apri_e = aPriEst_c[4*epoch-3:4*epoch]   #apriori pos and time estimation for this epoch
+        if (lighttimeCorrection)
+          navconPos_e = [transmitterFinder(epochTimes[epoch]-(apri_e[4]/lightConst), Tuple(apri_e[1:3]), KeplerOrbit(navigationEphemeris[prn], epochTimes[epoch])).pos for prn in 1:n_sats]
+        else
+          navconPos_e = [globalPosition(navigationEphemeris[i], epochTimes[epoch]-(apri_e[4]/lightConst)) for i in 1:length(navigationEphemeris)] #navigation constellation positions
+        end
+
+        eRange = 1+((epoch-1)*4):epoch*4
+        Nxx_tmp = zeros(Float64, 4, 4)    #Temporary storage of local Nxx
+        #Loop over available satellites = each 2 measurements
+        for prn in prns[avail[epoch, :]]
+            navsatpos = navconPos_e[prn]
+            posdiff = apri_e[1:3].- collect(navsatpos)
+            r = norm(posdiff) #Geometric range
+
+            # Sats_uvec is [i; j; k; 1.0] = [r/|x|; r/|y|; r/|z|; dt/|dt|]
+            sats_uvec = vcat(posdiff/r, 1.0)
+
+            # Find mode code and phase data, and add to model vector
+            biasNumber_current = biasNumbers[epoch, prn]
+            model_phase = r + apri_e[4] - aPriEst[n_epochs*4 + biasNumber_current] #model for phase
+            model_pseudorange = r + apri_e[4]               #model for pseudo range
+
+            # Build onto error matrices
+            nx[eRange] += sats_uvec .*codeWeight .* (rangeData[epoch, prn] - model_pseudorange)
+            nx[eRange] += sats_uvec .*phaseWeight .* (phaseData[epoch, prn] - model_phase)
+            nb[biasNumber_current] += -1 * phaseWeight .*(phaseData[epoch, prn] - model_phase)
+
+            # Build onto normal equation matrices
+            Nxx_tmp += (sats_uvec * sats_uvec') * (phaseWeight + codeWeight)
+            Nbb[biasNumber_current, biasNumber_current] += phaseWeight
+            Nxb[eRange, biasNumber_current] += -(sats_uvec) * phaseWeight
+        end
+        #Inverse the lcoal Nxx for faster inversion
+        Nxx_inv[eRange, eRange] = inv(Nxx_tmp) #Inverse of local N_XX 4x4 matrix
+    end
+
+    Nbx = Nxb'
+
+    # Bias and Position updates
+    cov_bb = inv(Nbb - Nxb'*Nxx_inv*Nxb)
+    cov_xx = Nxx_inv + (Nxx_inv*Nxb) * cov_bb * ((Nxx_inv*Nxb)')
+
+    return (cov_bb = cov_bb, cov_xx = cov_xx)
 end
