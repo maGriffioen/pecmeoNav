@@ -223,7 +223,7 @@ function propagateKeplerOrbit(ko::KeplerOrbit, timeIncrement::Number)
 
     # Find the mean motion of the orbit and progress it with timeIncrement
     meanMotion = sqrt(ko.cbody.gravitationalParameter / (ko.a^3))
-    meanAnomaly += meanMotion * timeIncrement
+    meanAnomaly += meanMotion * (timeIncrement % orbitalPeriod(ko))
 
     # Convert mean anomaly back to true anomaly
     newTrueAnomaly = meanToTrueAnomaly(meanAnomaly, ko.e)
