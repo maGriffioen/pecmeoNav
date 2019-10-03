@@ -87,8 +87,8 @@ end
 # Generate a disturbed Kepler Ephemeris from Kepler element Noise
 function noisyKeplerEphemeris(times::Array{<:Number}, orbit::KeplerOrbit, noise::KeplerEphemerisSD)
     orbit_array = Array{KeplerOrbit, 1}(undef, 0)
-    normError = randn(6)
     for t in times
+        normError = randn(6)
         curr_orbit = propagateKeplerOrbit(orbit, t)
         noisyOrbit = KeplerOrbit(
             curr_orbit.a + noise.a_sigma * normError[1],
