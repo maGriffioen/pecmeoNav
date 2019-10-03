@@ -25,12 +25,20 @@ function findSignalTravelTime(recPos::Tup3d, transmitter::KeplerOrbit, time::Num
 end
 
 # Find transmitter position and time of transmission (due to light time effect)
-function transmitterFinder(receptionTime::Number, receiverPos::Tup3d, transmitterOrbit::Orbit;
-    maximumCorrection = 1e-14, maxIter = 10)
-    travelTime = 0.0    #Assume instant signal as first estimate
-    correction = 1      #Force loop to start
+# This is a higher accuracy version of transmitterFinder (using Double64 instead of Float64)
+function transmitterFinder2(receptionTime::Number, receiverPos::Tup3d, transmitterOrbit::Orbit;
+    maximumCorrection = 1e-20, maxIter = 10)
+    receptionTime = Double64(receptionTime)
+    receiverPos = Double64.(receiverPos)
+    to = transmitterOrbit
+    transmitterOrbit = KeplerOrbit(Double64(to.a), Double64(to.e), Double64(to.i),
+        Double64(to.raan), Double64(to.aop), Double64(to.tanom), to.cbody)
+    maximumCorrection = Double64(maximumCorrection)
+    travelTime = df64"0.0"    #Assume instant signal as first estimate
+    correction = df64"1"      #Force loop to start
     transTime = receptionTime   #Initialization
-    transPos = (0.0, 0.0, 0.0)  #Initialization
+    transPos = (df64"0.0", df64"0.0", df64"0.0")  #Initialization
+    distance = df64"0.0"
 
     nIter = 0   #Iteration counter
     # Iterate while no convergence of smaller than xx seconds is reached
@@ -46,7 +54,34 @@ function transmitterFinder(receptionTime::Number, receiverPos::Tup3d, transmitte
         nIter +=1
     end
 
-    return (transmissionTime = transTime, pos = transPos, travelTime = travelTime,
+    return (transmissionTime = Float64(transTime), pos = Float64.(transPos), distance = Float64(distance), travelTime = Float64(travelTime),
+        lastCorrection = Float64(correction), iterations = nIter)
+end
+
+function transmitterFinder(receptionTime::Number, receiverPos::Tup3d, transmitterOrbit::Orbit;
+    maximumCorrection = 1e-15, maxIter = 10)
+    travelTime = 0.0    #Assume instant signal as first estimate
+    correction = 1      #Force loop to start
+    transTime = receptionTime   #Initialization
+    transPos = (0.0, 0.0, 0.0)  #Initialization
+    distance = 0.0
+
+    nIter = 0   #Iteration counter
+    # Iterate while no convergence of smaller than xx seconds is reached
+    while (abs(correction) > maximumCorrection && nIter < maxIter)   #TODO: Tweak value for balance between stability and numerical accuracy
+        # Calculate new transmitter position & time
+        transTime = receptionTime - travelTime      #Time of transmission of signal
+        transPos = globalPosition(transmitterOrbit, transTime)  #Position of transmitting satellite
+        distance = norm(transPos .- receiverPos)    #Travel distance of signal
+        travelTime_new = distance/lightConst            #Travel time of signal
+
+        # Find applied correction for the decision if convergence has been reached
+        correction = travelTime - travelTime_new
+        travelTime = travelTime_new
+        nIter +=1
+    end
+
+    return (transmissionTime = transTime, pos = transPos, distance = distance, travelTime = travelTime,
         lastCorrection = correction, iterations = nIter)
 end
 
@@ -106,6 +141,37 @@ function instantMeasurements(recPos::Tup3d, transPos::Array{<:Tup3d}, time::Numb
 end
 
 
+function codeErrorVarianceFromNoise_TiberiusCoherent(CNR::Number, loopBandwidth::Number, earlyToLateSpacing::Number, prnChipLength::Number)
+    sigma2 = (loopBandwidth * earlyToLateSpacing / (2*CNR))
+    return sqrt(sigma2) * prnChipLength
+end
+
+function codeErrorVarianceFromNoise_TiberiusEarlyMinusLate(CNR::Number, loopBandwidth::Number, earlyToLateSpacing::Number, prnChipLength::Number, predetectionIntegrationInterval::Number)
+    sigma2 = (loopBandwidth * earlyToLateSpacing / (2*CNR)) * (1+ (2/(predetectionIntegrationInterval*(2-earlyToLateSpacing)*CNR)))
+    return sqrt(sigma2) * prnChipLength
+end
+
+function codeErrorVarianceFromNoise_TiberiusDot(CNR::Number, loopBandwidth::Number, earlyToLateSpacing::Number, prnChipLength::Number, predetectionIntegrationInterval::Number)
+    sigma2 = (loopBandwidth * earlyToLateSpacing / (2*CNR)) * (1+ (2/(predetectionIntegrationInterval*CNR)))
+    return sqrt(sigma2) * prnChipLength
+end
+
+function phaseErrorVarianceFromNoise_Tiberius(CNR::Number, loopBandwidth::Number, wavelength::Number, predetectionIntegrationInterval::Number)
+    sigma2 = (loopBandwidth / CNR) * (1+ (1/(2*predetectionIntegrationInterval*CNR)))
+    return (sqrt(sigma2)/ (2*pi)) * wavelength
+end
+
+function phaseErrorVarianceFromNoise_TiberiusSimplified(CNR::Number, loopBandwidth::Number, wavelength::Number)
+    sigma2 = (loopBandwidth / CNR)
+    return (sqrt(sigma2)/ (2*pi)) * wavelength
+end
+
+function phaseErrorVarianceFromNoise_GPSWorld(SNR::Number, sampleFreq::Number, wavelength::Number)
+    sigma = wavelength/(pi * sqrt(2* SNR * 19200))
+    return sigma
+end
+
+
 # Simulate the measurements at a single epoch
 # Considers:
 #   Lighttime effect
@@ -134,7 +200,9 @@ end
 #   phaseSD             Standard Deviations of the phase measurement noise
 function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiverOrbit::Orbit, navcon::Orbit,
     receiverSettings::RangeReceiverSettings, transmitterSettings::Array{RangeTransmitterSettings,1};
-    lighttimeEffect = true, addNoise = true, writeToFile = false, outputFile = "")
+    lighttimeEffect = true, addNoise = true, writeToFile = false, outputFile = "",
+    addCarrierAmbiguity = true,
+    lastAvailability = [], carrierAmbiguity = [])
     nsats = size(navcon)                        #Navigation constellation size
     codes = Array{Float64, 1}(undef, nsats)
     phases = Array{Float64, 1}(undef, nsats)
@@ -142,12 +210,25 @@ function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiv
     phaseSDs = Array{Float64, 1}(undef, nsats)
     avail = BitArray(undef, nsats)
 
+    freq = receiverSettings.frequency
+    wavelength = lightConst / freq
+    carrierAmbiguityRange = -10000:10000
+
+    if lastAvailability == []
+        lastAvailability = BitArray(undef, nsats)
+        lastAvailability .= false
+    end
+
+    if addCarrierAmbiguity && carrierAmbiguity == []
+        carrierAmbiguity = wavelength * rand(carrierAmbiguityRange, nsats)
+    end
+
     #Loop over navigation satellites for this epoch
     for prn in 1:nsats
         receiverPosition = globalPosition(receiverOrbit, inertialTime)
         if lighttimeEffect
             # Transmitter position during transmission of received signal
-            transmitter = transmitterFinder(inertialTime, receiverPosition, navcon[prn])
+            transmitter = transmitterFinder(inertialTime, receiverPosition, navcon[prn]; maxIter = 20)
         else
             # Transmitter position during signal reception (no light time effect)
             transmitter = (pos = globalPosition(navcon[prn], inertialTime),
@@ -164,8 +245,7 @@ function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiv
 
         # Check if satellites are connected and within line of sight
         available = los && connection
-        freq = receiverSettings.frequency
-        wavelength = lightConst / freq
+
 
         avail[prn] = available
         if (available)
@@ -181,7 +261,7 @@ function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiv
                 snrCalc = snrCalculation(inertialTime, receiverTime, receiverPosition, transmitter,
                         receiverSettings, txSettings)
                 cnr = snrCalc.cnr_straight
-                codeSD = sqrt(((4 * 1) / (2*cnr))) * 293     # Simple model, allow replacement of model :)
+                codeSD = sqrt(((4 * 1) / (2*cnr)  )) * 293     # Simple model, allow replacement of model :)
                 phaseSD =sqrt((receiverSettings.trackingLoopBandwidth / cnr) *
                     (1+ (1/ ( 2*cnr * receiverSettings.predetectionIntegrationInterval )))) * (wavelength/(2*pi))
                 codeError = randn() * codeSD  # Error within receiver system, dependent on SNR
@@ -189,29 +269,56 @@ function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiv
             else
                 codeError = 0.0
                 phaseError = 0.0
+                codeSD = 0.0
+                phaseSD = 0.0
             end
             codeSDs[prn] = codeSD
             phaseSDs[prn] = phaseSD
 
+            if addCarrierAmbiguity
+                if !lastAvailability[prn]
+                    carrierAmbiguity[prn] = rand(carrierAmbiguityRange)
+                end
+                carrierAmbiguity_cur = carrierAmbiguity[prn]
+            else
+                carrierAmbiguity_cur = 0
+            end
+
                 # Neglecting transmitter clock error and relativistic effect -> will be largely recovered
             if lighttimeEffect# Please use this and apply the light time effect :)
-                codes[prn] = (receiverTime - transmitter.transmissionTime) * lightConst + codeError
+                # Bad practice with an inaccurate method
+                # codes[prn] = (receiverTime - transmitter.transmissionTime) * lightConst + codeError
+
+                # Improved good method
+                codes[prn] = (receiverTime - inertialTime) * lightConst + transmitter.distance + codeError
+
             else
                 range = norm(globalPosition(receiverOrbit, inertialTime) .- transmitter.pos)
                 # Unrealistically neglecting light time effect, which really shouldnt be neglected
-                codes[prn] = range + codeError
+                codes[prn] = (receiverTime - inertialTime) * lightConst + range + codeError
             end
 
 
             #Simulate Phase measurement
             if lighttimeEffect
                 # Please use this and apply the light time effect :)
-                phases[prn] = wavelength * (receiverSettings.zero_phase + freq*receiverTime -
-                    transmitterSettings[prn].zero_phase - freq * transmitter.transmissionTime) + phaseError
+                # Bad practice method
+                # phases[prn] = wavelength * (receiverSettings.zero_phase + freq*receiverTime -
+                #     transmitterSettings[prn].zero_phase - freq * transmitter.transmissionTime) + phaseError
+
+                # Slightly improved method
+                # phases[prn] = transmitter.distance + wavelength * (receiverSettings.zero_phase + freq*(receiverTime- inertialTime) -
+                #     transmitterSettings[prn].zero_phase) + phaseError
+
+                # This is the final GOOD representation!
+                phases[prn] = transmitter.distance + wavelength * (receiverSettings.zero_phase - transmitterSettings[prn].zero_phase) +
+                    lightConst * (receiverTime- inertialTime) +phaseError + carrierAmbiguity_cur
             else
                 # Unrealistically neglecting light time effect, which really shouldnt be neglected
-                phases[prn] = wavelength * (receiverSettings.zero_phase + freq*(receiverTime) -
-                    transmitterSettings[prn].zero_phase - freq * (inertialTime - range / lightConst)) + phaseError
+                # phases[prn] = wavelength * (receiverSettings.zero_phase + freq*(receiverTime) -
+                #     transmitterSettings[prn].zero_phase - freq * (inertialTime - range / lightConst)) + phaseError
+                phases[prn] = range + wavelength * (receiverSettings.zero_phase + freq*(receiverTime - inertialTime) -
+                    transmitterSettings[prn].zero_phase) + phaseError + carrierAmbiguity_cur
 
 
             end
@@ -226,7 +333,8 @@ function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiv
             phaseSDs[prn] = 0.0
         end
     end
-    return (code = codes, phase = phases, avail = avail, timeStamp = receiverTime, codeSD = codeSDs, phaseSD = phaseSDs)
+    return (code = codes, phase = phases, avail = avail, timeStamp = receiverTime,
+    codeSD = codeSDs, phaseSD = phaseSDs, carrierAmbiguity = carrierAmbiguity)
 end
 
 # Simulate measurements at sequential times
@@ -254,7 +362,8 @@ end
 #   codeSD              Standard Deviations of the code measurement noise, per epoch, per satellite
 #   phaseSD             Standard Deviations of the phase measurement noise, per epoch, per satellite
 function simulateMeasurements(inertialTime::Array{<:Number}, receiverTime::Array{<:Number}, receiverOrbit::Orbit, navcon::Orbit,
-    receiverSettings::RangeReceiverSettings, transmitterSettings::Array{RangeTransmitterSettings,1}; lighttimeEffect = true, addNoise=true)
+    receiverSettings::RangeReceiverSettings, transmitterSettings::Array{RangeTransmitterSettings,1}; lighttimeEffect = true, addNoise=true,
+    addCarrierAmbiguity = true)
     #Raise error if number of measurements is not clear
     if (length(inertialTime) != length(receiverTime))
         error("simulateMeasurements: Number of true times not equal to number of receiver times")
@@ -268,18 +377,27 @@ function simulateMeasurements(inertialTime::Array{<:Number}, receiverTime::Array
     phaseSD = Array{Float64}(undef, nepochs, nsats)
     availability = BitArray(undef, nepochs, nsats)     #Per-epoch, per-prn availability boolean
 
+    availLast = BitArray(undef, nsats)
+    availLast .= false
+    carrierAmbiguity = zeros(Float64, nsats)
+
     for epoch = 1:nepochs
         msrmt = simulateMeasurements(inertialTime[epoch],
                     receiverTime[epoch],
                     receiverOrbit, navcon,
                     receiverSettings, transmitterSettings;
                     lighttimeEffect = lighttimeEffect,
-                    addNoise = addNoise)
+                    addNoise = addNoise,
+                    addCarrierAmbiguity = addCarrierAmbiguity,
+                    lastAvailability = availLast,
+                    carrierAmbiguity = carrierAmbiguity)
         codeObs[epoch, :] = msrmt.code
         phaseObs[epoch, :] = msrmt.phase
         codeSD[epoch, :] = msrmt.codeSD
         phaseSD[epoch, :] = msrmt.phaseSD
         availability[epoch, :] = msrmt.avail
+        availLast = msrmt.avail
+        carrierAmbiguity = msrmt.carrierAmbiguity
     end
 
     return (codeObs = codeObs, phaseObs = phaseObs, availability = availability, timeStamp = receiverTime, codeSD=codeSD, phaseSD=phaseSD)
