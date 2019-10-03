@@ -101,7 +101,7 @@ end
 # initTime is the start of the integration
 # propagationStepSize: step size of the propagation of the timeODE
 # interParam: location in vector of timeODE output with local clock time
-function integration_interpolationRK4(timeODE::Function, interpolValues::StepRangeLen,
+function integration_interpolationRK4(timeODE::Function, interpolValues,
     initTime::Number, propagationStepSize::Number; interParam::Int = 1)
 
     h = propagationStepSize
@@ -144,12 +144,13 @@ function integration_interpolationRK4(timeODE::Function, interpolValues::StepRan
 
             #Iterate With Newton-Raphson Method to find the root for measurement time
             iter = 0
-            while error > 1e-13 && iter < 100
+            while error > 1e-20 && iter < 100
                 root_dt -= (root.y[interParam] - interpolVal_tofind)/root.dydt[interParam]
                 root = rk4Step(odefun, t_curr, y_curr, dydt_curr, root_dt)
                 error = abs(interpolVal_tofind - root.y[interParam])
                 iter += 1
             end
+
             if iter >1
                 println("Many iterations: \t", iter, " @t_m= ", interpolVal_tofind)
             end
