@@ -45,16 +45,11 @@ begin
 
     Random.seed!(0)
     operatingFrequency = 1575.42e6
-    receptionNoiseTemp = 513.0
-    receptionBandwidth = 2e6
-    trackingLoopBandwidth = 5
-    predetectionIntegrationInterval = 20e-3
     # operatingFrequency = 1e9
-    recSettings = RangeReceiverSettings( 0.0, receptionNoiseTemp, receptionBandwidth, trackingLoopBandwidth, predetectionIntegrationInterval, operatingFrequency, recGain,
+    recSettings = RangeReceiverSettings( 0.0, 513.0, 2e6, 5, 20e-3, operatingFrequency, recGain,
         recPointing, 0.0)
     nSats = size(navcon)
-    transmitPower = 300
-    txSettings = [RangeTransmitterSettings( rand(Float64), transmitPower, operatingFrequency, txGain,
+    txSettings = [RangeTransmitterSettings( rand(Float64), 300.0, operatingFrequency, txGain,
         txPointing_PECMEO, 0.0) for prn in 1:nSats]
 
     lte = true
@@ -62,7 +57,7 @@ begin
 end
 
 # (Receiver clock) times at which to perform meaasurements
-measurements = 3600*0:30:3600*240
+measurements = 3600*0:30:3600*2
 # Find the inertial times for these measurement times
 @time clockIntegratorResults = integration_interpolationRK4(receiverClockODE, measurements, 0.0, 2.0; interParam=2)
 
@@ -109,7 +104,7 @@ plot!(trueMeasurementTimes/3600, pdop, label="PDOP")
 
 # Create navigation satellite ephemeres. These are the broadcast ephemeres
 Random.seed!(1) #Seed for ephemeres
-@time input_navconEphemeres = [noisyKeplerEphemeris(collect(0:1800:maximum(measurements)), navcon[i], KeplerEphemerisSD(0.00, 0.0, 0.0, 0.0, 0.0, 0.0)) for i in 1:size(navcon)]
+@time input_navconEphemeres = [noisyKeplerEphemeris(collect(0:1800:maximum(measurements)), navcon[i], KeplerEphemerisSD(0.01, 0.0, 0.0, 0.0, 0.0, 0.0)) for i in 1:size(navcon)]
 if true
     ephemerisErrors = []
     for t in trueMeasurementTimes
@@ -124,51 +119,38 @@ if true
 end
 
 Random.seed!(1000)
+realtimeKinSolutions = []
 
-# Define input parameters for the position estimation
-input_measurementEpochs = simulatedMeasurements.timeStamp
-# input_measurementEpochs = trueMeasurementTimes
-input_pseudoRanges = simulatedMeasurements.codeObs
-input_phases = simulatedMeasurements.phaseObs
-input_availability = simulatedMeasurements.availability
+for epoch_now in 1:length(measurements)
+    println(epoch_now)
+    passed_epochs = 1:epoch_now
+    # Define input parameters for the position estimation
+    input_measurementEpochs = simulatedMeasurements.timeStamp[passed_epochs]
+    # input_measurementEpochs = trueMeasurementTimes
+    input_pseudoRanges = simulatedMeasurements.codeObs[passed_epochs, :]
+    input_phases = simulatedMeasurements.phaseObs[passed_epochs, :]
+    input_availability = simulatedMeasurements.availability[passed_epochs, :]
 
-#Point position estimation
-pointPosition_apriori = vcat([vcat([j for j in bodyPosition(moon, input_measurementEpochs[i])], 0.0)' for i in 1:length(measurements)]...)
-@time pointPosition_estimation = sequentialPointPosition(input_measurementEpochs, input_navconEphemeres, input_pseudoRanges, input_availability;
-    aprioriEstimations = pointPosition_apriori, correctionLimit = 1e-4, maxIter = 10, lighttimeCorrection = lte)
+    #Point position estimation
+    pointPosition_apriori = vcat([vcat([j for j in bodyPosition(moon, input_measurementEpochs[i])], 0.0)' for i in 1:length(input_measurementEpochs)]...)
+    @time pointPosition_estimation = sequentialPointPosition(input_measurementEpochs, input_navconEphemeres, input_pseudoRanges, input_availability;
+        aprioriEstimations = pointPosition_apriori, correctionLimit = 1e-4, maxIter = 10, lighttimeCorrection = lte)
 
-# Process point position results
-pointPosition_xyzErrors = [correct_positions[i] .- pointPosition_estimation.estimation[i][1:3] for i in 1:length(measurements)]
-pointPosition_rssErrors = [norm(correct_positions[i] .- pointPosition_estimation.estimation[i][1:3]) for i in 1:length(measurements)]
-pointPosition_meanRssError = sum(pointPosition_rssErrors[pointPosition_estimation.resultValidity]) / length(pointPosition_rssErrors[pointPosition_estimation.resultValidity])
-println("\n PointPosi error: \t", pointPosition_meanRssError)
-myplot_ppErrors = plot(input_measurementEpochs/3600, [pointPosition_rssErrors movingAverage(pointPosition_rssErrors; n=5)]./1000.0, yaxis=("Point Position Error [km]", (0, 2.7e1)), label=["Direct" "Moving Average"], w=[1.0 2.0])
-plot!(input_navconEphemeres[1].timeReferences/3600, linetype=:vline, c=:black, w=0.5, label="Ephemeris update")
+    #Kinematic positioning. First horrible line formats point positioning results into usable apriori
+    kinematicApriori = reshape(reinterpret(Float64, pointPosition_estimation.estimation), (4, length(input_measurementEpochs)))'
+    @time kinEstim = kinematicEstimation(input_navconEphemeres, input_measurementEpochs,
+        input_pseudoRanges, input_phases,
+        input_availability;
+        ppApriori = kinematicApriori, maxIter_pp=0, maxIter_kin = 8,
+        codeWeight = 1.0, phaseWeight = 1.0e6, correctionLimit_kin = 2e-4,
+        lighttimeCorrection = lte)
 
-#Kinematic positioning. First horrible line formats point positioning results into usable apriori
-kinematicApriori = reshape(reinterpret(Float64, pointPosition_estimation.estimation), (4, length(measurements)))'
-@time kinEstim = kinematicEstimation(input_navconEphemeres, input_measurementEpochs,
-    input_pseudoRanges, input_phases,
-    input_availability;
-    ppApriori = kinematicApriori, maxIter_pp=0, maxIter_kin = 8,
-    codeWeight = 12^-2, phaseWeight = 0.002^-2, correctionLimit_kin = 2e-4,
-    lighttimeCorrection = lte)
+    # Process kinematic estimation results
+    kinematic_epochs = vcat([collect(x) for x in kinEstim.archs]...)
+    kinematic_positionTime = kinEstim.positionTimeEstimation
+    push!(realtimeKinSolutions, kinematic_positionTime[length(kinematic_positionTime)])
+end
 
-
-# Process kinematic estimation results
-kinematic_epochs = vcat([collect(x) for x in kinEstim.archs]...)
-kinematic_positionTime = kinEstim.positionTimeEstimation
-kinematic_times = [kinematic_positionTime[e][4] for e in kinematic_epochs]
-kinematic_times_true = [trueMeasurementTimes[e] for e in kinematic_epochs]
-kinematic_phaseBiases   = kinEstim.biasEstimation
-kinematic_timeError = [kinematic_positionTime[e][4] .- actualClockMeasurementError[e] for e in kinematic_epochs]
-kinematic_xyzErrors = [kinematic_positionTime[e][1:3] .- correct_positions[e] for e in kinematic_epochs]
-kinematic_rssErrors = [norm(correct_positions[e] .- kinematic_positionTime[e][1:3]) for e in kinematic_epochs]
-kinematic_meanAccuracy = mean(kinematic_rssErrors)
-kinematic_posVariance = [sqrt(sum(kinEstim.variance_xyzt[e, 1:3]))  for e in kinematic_epochs]
-println("\n Kinematic Position error: \t", kinematic_meanAccuracy)
-myplot_kinErrors = plot(kinEstim.kinTimes/3600, [kinematic_rssErrors movingAverage(kinematic_rssErrors; n=5)], yaxis=("Kinematic Error [m]", (0, 12)), label=["Direct" "Moving Average"], w=[1.0 2.0])
-plot!(input_navconEphemeres[1].timeReferences/3600, linetype=:vline, c=:black, w=0.5, label="Ephemeris update")
 
 if true
     # Reshape errors into different reference frame
