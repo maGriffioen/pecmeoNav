@@ -208,6 +208,8 @@ function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiv
     phases = Array{Float64, 1}(undef, nsats)
     codeSDs = Array{Float64, 1}(undef, nsats)
     phaseSDs = Array{Float64, 1}(undef, nsats)
+    codeNoise = Array{Float64, 1}(undef, nsats)
+    phaseNoise = Array{Float64, 1}(undef, nsats)
     avail = BitArray(undef, nsats)
 
     freq = receiverSettings.frequency
@@ -274,6 +276,8 @@ function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiv
             end
             codeSDs[prn] = codeSD
             phaseSDs[prn] = phaseSD
+            codeNoise[prn] = codeError
+            phaseNoise[prn] = phaseError
 
             if addCarrierAmbiguity
                 if !lastAvailability[prn]
@@ -334,7 +338,8 @@ function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiv
         end
     end
     return (code = codes, phase = phases, avail = avail, timeStamp = receiverTime,
-    codeSD = codeSDs, phaseSD = phaseSDs, carrierAmbiguity = carrierAmbiguity)
+    codeSD = codeSDs, phaseSD = phaseSDs, carrierAmbiguity = carrierAmbiguity,
+    codeNoise = codeNoise, phaseNoise=phaseNoise)
 end
 
 # Simulate measurements at sequential times
@@ -375,6 +380,8 @@ function simulateMeasurements(inertialTime::Array{<:Number}, receiverTime::Array
     phaseObs = Array{Float64}(undef, nepochs, nsats)   #Per-epoch, per-prn phase observation
     codeSD = Array{Float64}(undef, nepochs, nsats)
     phaseSD = Array{Float64}(undef, nepochs, nsats)
+    codeNoise = Array{Float64}(undef, nepochs, nsats)
+    phaseNoise = Array{Float64}(undef, nepochs, nsats)
     availability = BitArray(undef, nepochs, nsats)     #Per-epoch, per-prn availability boolean
 
     availLast = BitArray(undef, nsats)
@@ -395,10 +402,13 @@ function simulateMeasurements(inertialTime::Array{<:Number}, receiverTime::Array
         phaseObs[epoch, :] = msrmt.phase
         codeSD[epoch, :] = msrmt.codeSD
         phaseSD[epoch, :] = msrmt.phaseSD
+        codeNoise[epoch, :] = msrmt.codeNoise
+        phaseNoise[epoch, :] = msrmt.phaseNoise
         availability[epoch, :] = msrmt.avail
         availLast = msrmt.avail
         carrierAmbiguity = msrmt.carrierAmbiguity
     end
 
-    return (codeObs = codeObs, phaseObs = phaseObs, availability = availability, timeStamp = receiverTime, codeSD=codeSD, phaseSD=phaseSD)
+    return (codeObs = codeObs, phaseObs = phaseObs, availability = availability, timeStamp = receiverTime, codeSD=codeSD, phaseSD=phaseSD,
+    codeNoise = codeNoise, phaseNoise=  phaseNoise)
 end
