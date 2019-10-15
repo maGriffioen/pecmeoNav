@@ -378,6 +378,8 @@ function kinematicEstimation(navigationEphemeris::Array{<:Ephemeris}, epochTimes
     corrections = Array{Float64, 1}(undef, 0)
 
     variance_xyzt = zeros(n_epochs, 4)
+    residuals = []
+    residuals_weighted = []
 
     # Split into visibility archs and solev on a per-arch basis
     for archEpochs in archs
@@ -435,6 +437,9 @@ function kinematicEstimation(navigationEphemeris::Array{<:Ephemeris}, epochTimes
           idx = 1+4*(localEpochNumber-1)
           variance_xyzt[epoch, :] = [var_xxs[idx+i] for i in 0:3 ]
       end
+      append!(residuals, kincov.residuals)
+      append!(residuals_weighted, kincov.weighted_residuals)
+
 
       append!(iterations, iter)
       append!(corrections, correction)
@@ -442,7 +447,8 @@ function kinematicEstimation(navigationEphemeris::Array{<:Ephemeris}, epochTimes
 
    return (positionTimeEstimation = kinematic_xyztResults, biasEstimation = kinematic_biasResults,
       iterations = iterations, lastCorrection = corrections, kinTimes = epochTimes, archs = archs,
-      boolarchs = kinematic_processed, variance_xyzt = variance_xyzt)
+      boolarchs = kinematic_processed, variance_xyzt = variance_xyzt,
+      residuals = residuals, residuals_weighted = residuals_weighted)
 end
 
 # Perform a single iteration of kinematic estimation of satellite position, clock errors and bias
@@ -637,6 +643,8 @@ function kinematic_covariance(navigationEphemeris::Array{<:Ephemeris}, epochTime
     Nbb = zeros(n_bias, n_bias)
     nx = zeros(n_epochs*4, 1)
     nb = zeros(n_bias, 1)
+    residuals = zeros(n_measurements, 1)
+    weighted_residuals = zeros(n_measurements, 1)
 
     # Dynamically grow apriori estimation vector
     aPriEst = aPriEst_c
@@ -654,7 +662,7 @@ function kinematic_covariance(navigationEphemeris::Array{<:Ephemeris}, epochTime
         append!(aPriEst, aPriBias)
     end
 
-    rowIter = 1
+    msrmt = 1
     #Loop over all epochs
     for epoch in 1:n_epochs
         apri_e = aPriEst_c[4*epoch-3:4*epoch]   #apriori pos and time estimation for this epoch
@@ -680,6 +688,12 @@ function kinematic_covariance(navigationEphemeris::Array{<:Ephemeris}, epochTime
             model_phase = r + apri_e[4] - aPriEst[n_epochs*4 + biasNumber_current] #model for phase
             model_pseudorange = r + apri_e[4]               #model for pseudo range
 
+
+            residuals[msrmt] = (rangeData[epoch, prn] - model_pseudorange)
+            residuals[msrmt+1] = (phaseData[epoch, prn] - model_phase)
+            weighted_residuals[msrmt] = codeWeight* (rangeData[epoch, prn] - model_pseudorange)
+            weighted_residuals[msrmt+1] = phaseWeight* (phaseData[epoch, prn] - model_phase)
+
             # Build onto error matrices
             nx[eRange] += sats_uvec .*codeWeight .* (rangeData[epoch, prn] - model_pseudorange)
             nx[eRange] += sats_uvec .*phaseWeight .* (phaseData[epoch, prn] - model_phase)
@@ -689,6 +703,8 @@ function kinematic_covariance(navigationEphemeris::Array{<:Ephemeris}, epochTime
             Nxx_tmp += (sats_uvec * sats_uvec') * (phaseWeight + codeWeight)
             Nbb[biasNumber_current, biasNumber_current] += phaseWeight
             Nxb[eRange, biasNumber_current] += -(sats_uvec) * phaseWeight
+
+            msrmt +=2
         end
         #Inverse the lcoal Nxx for faster inversion
         Nxx_inv[eRange, eRange] = inv(Nxx_tmp) #Inverse of local N_XX 4x4 matrix
@@ -700,5 +716,5 @@ function kinematic_covariance(navigationEphemeris::Array{<:Ephemeris}, epochTime
     cov_bb = inv(Nbb - Nxb'*Nxx_inv*Nxb)
     cov_xx = Nxx_inv + (Nxx_inv*Nxb) * cov_bb * ((Nxx_inv*Nxb)')
 
-    return (cov_bb = cov_bb, cov_xx = cov_xx)
+    return (cov_bb = cov_bb, cov_xx = cov_xx, residuals = residuals, weighted_residuals = weighted_residuals)
 end

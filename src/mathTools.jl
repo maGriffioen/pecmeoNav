@@ -28,8 +28,18 @@ function movingAverage(data; n=3)
     return new_data
 end
 
+function sampleStandardDeviation(data)
+    mn = mean(data)
+    samples = length(data)
+    ssd = sqrt((1/(samples-1)) * sum((data.-mn).^2))
+    return ssd
+end
+
 # Calculate the mean of a data series
 mean(data) = sum(data) / length(data)
+rms(data) = sqrt(mean(data.^2))
+rss(data) = sqrt(sum(data.^2))
+ssd(data) = sampleStandardDeviation(data)
 
 lin2log(linValue::Number) = 10 * log10(linValue)    #Linear to (10)logarithmic scale
 log2lin(logValue::Number) = 10^(logValue / 10)      #(10)logarithmic to linear scale
