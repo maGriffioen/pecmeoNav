@@ -1,3 +1,15 @@
+# Calculate Rodrigues rotation of 3d vectors
+function vector_rotation(orgvec, refvec, angle)
+    if length(orgvec) > 3 || length(refvec) > 3
+        error("Rodrigues rotation needs 3d vectors")
+    end
+    k = normalize(refvec)
+    v = orgvec
+    v_new = v*cos(angle) + cross(k, v) * sin(angle) + k*dot(k, v) * (1-cos(angle))
+
+    return v_new
+end
+
 # Calculate the moving average over a data series.
 # Input:
 # Data  Input data vector

@@ -6,7 +6,7 @@ earthState(time::Number) = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 earth = Body(
     name = "Earth",
     gravitationalParameter =5.9724e24 * gravConst,
-    radius = 6378.1e3, # Equatorial radius, pessimistic case for shadowing
+    radius = 6378.1e3 + 800e3, # Equatorial radius, pessimistic case for shadowing
     stateFunction = earthState
 )
 moonState(time::Number) = globalState(propagateKeplerOrbit(lunarOrbit, time))
