@@ -137,14 +137,16 @@ function optimDesignToPecmeo(x; rawparam = false)
 end
 
 function saveParetoToFile(filepathname, optimresult)
-    open(filename*"_fitness.txt", "w") do f
+    open(filepathname*"_fitness.txt", "w") do f
         for ln in pareto_frontier(optimresult)
-            write(fitness(ln))
+            n1, n2 = fitness(ln)
+            write(f, "$n1, $n2 \n")
         end
     end
-    open(filename*"_params.txt", "w") do f
+    open(filepathname*"_params.txt", "w") do f
         for ln in pareto_frontier(optimresult)
-            write(params(ln))
+            n1, n2, n3, n4 = params(ln)
+            write(f, "$n1, $n2, $n3, $n4 \n")
         end
     end
 
