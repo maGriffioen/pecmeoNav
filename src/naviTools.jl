@@ -151,8 +151,13 @@ function hasLineOfSight(receiverLocation::Tup3d,
     signalDistance = norm(bodyToRec .- (dot(bodyToRec, transDir)).*transDir )
 
     isBodyInline = signalDistance < bodyRadius
-    isBodyBetween = max(sqrt( sum(bodyToTrans.^2) - bodyRadius^2),
-        sqrt( sum(bodyToRec.^2) - bodyRadius^2)) < r
+    if (sum(bodyToRec.^2) - bodyRadius^2) > 0.0
+        isBodyBetween = max(sqrt( sum(bodyToTrans.^2) - bodyRadius^2),
+            sqrt( sum(bodyToRec.^2) - bodyRadius^2)) < r
+    else
+        #receiver is in body. I assume that is valid for between.
+        isBodyBetween = true
+    end
 
 
     return !(isBodyInline && isBodyBetween)
@@ -350,13 +355,14 @@ function kinematicEstimation(navigationEphemeris::Array{<:Ephemeris}, epochTimes
     biasNumber = zeros(Int16, n_epochs, maximum(prns))
     for epoch in 1:n_epochs
         for prn in prns[availability[epoch, :]]
-            if epoch > 1 && biasNumber[epoch-1, prn] > 0
+            if epoch > 1 && biasNumber[epoch-1, prn] > 0 && sum(availability[epoch,:]) > 3
                #Continue using old bias if a number has been assigned in previous epoch
                biasNumber[epoch, prn] = biasNumber[epoch-1, prn]
-            else
+            elseif sum(availability[epoch,:]) > 3
                #Create new bias Number
                biasNumber[epoch, prn] = maximum(biasNumber) + 1
             end
+
         end
     end
 
