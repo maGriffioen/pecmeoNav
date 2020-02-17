@@ -7,15 +7,11 @@ moonSat = KeplerOrbit(moon.radius + 100e3, 0.0,
     deg2rad(0), 0.0, 0.0, 0.0, moon)
 moonSat_p = KeplerOrbit(moon.radius + df64"100e3", df64"0.0", df64"0.0", df64"0.0", df64"0.0", df64"0.0", moon)
 KeplerOrbit(1.8381e6, 0.0, 0.0, 0.0, 0.0, 0.0, moon)
-#Pecmeo 
-pecmeo_333 = createCircPecmeo(26.4e6, (3, 3, 3), earth;
-    initialOrbitShift=(0.0, (2/6)*pi, (2/6)*pi),
-    equatorialRotation = 0*pi/8,
-    inclination = 0.0)
-pecmeo_333_p = createCircPecmeo(df64"26.4e6", (3, 3, 3), earth;
-    initialOrbitShift=(df64"0.0", 2 * Double64(pi) /6, 2 * Double64(pi) /6),
-    equatorialRotation = df64"0.0",
-    inclination = df64"0.0")
+#Pecmeo
+pecmeo_nav = lunarnavPECMEODesigner( [0.431459575985078,
+ 0.999729596168082,
+ 0.962413062424563,
+ 0.999922037056928])
 
 ### Set up epochs and time vector ###
 nepochs = 480      #Number of time steps
@@ -24,7 +20,7 @@ t0 = 0
 timevec = t0 .+ ((1:nepochs).-1) * timestep
 timevec_org = collect(timevec)
 ### Set up constellation and measurement storage ###
-navcon = pecmeo_333
+navcon = pecmeo_nav
 receiverOrbit = moonSat
 
 # Generate true ephemeris for each navigation satelltie
@@ -98,8 +94,8 @@ print("\n PointPosi error: \t", acc1)
 print("\n Kinematic error: \t", acc2)
 
 
-scatter!(timevec/3600, kinPosErrors, marker=(:dot, 3), lab="Navigation Error, no time dependent error")
+# scatter!(timevec/3600, kinPosErrors, marker=(:dot, 3), lab="Navigation Error, no time dependent error")
 # plot!(timevec/3600, pdop/1000000, lab="PDOP/1000")
-xaxis!("Time since epoch [h]")
-yaxis!("Navigation error [m] AND pdop/1E7 [-]")
-plot!(legend=:topleft)
+# xaxis!("Time since epoch [h]")
+# yaxis!("Navigation error [m] AND pdop/1E7 [-]")
+# plot!(legend=:topleft)
