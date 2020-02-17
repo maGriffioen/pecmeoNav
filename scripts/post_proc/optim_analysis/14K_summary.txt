@@ -1,0 +1,50 @@
+21723.73 secs, 19799 evals, 9990 steps, fitness=(3333.01863, 5507.42783) agg=8840.44647
+pop.size=756 arch.size=224 n.restarts=8
+22473.00 secs, 20492 evals, 10000 steps, fitness=(3333.61195, 5506.77340) agg=8840.38535
+pop.size=900 arch.size=232 n.restarts=9
+
+Optimization stopped after 10001 steps and 22475.16 seconds
+Termination reason: Max number of steps (10000) reached
+Steps per second = 0.44
+Function evals per second = 0.91
+Improvements/step = 0.00000
+Total function evaluations = 20494
+
+
+Best candidate found: [0.456351, 0.998609, 0.963862, 0.999786]
+
+Fitness: (3333.61195, 5506.77340) agg=8840.38535
+
+
+julia> res.parameters.dicts[2]
+Dict{Symbol,Any} with 24 entries:
+  :FitnessScheme               => ScalarFitnessScheme{true}()
+  :NumDimensions               => :NotSpecified
+  :PopulationSize              => 50
+  :MaxTime                     => 0.0
+  :SearchRange                 => (-1.0, 1.0)
+  :Method                      => :adaptive_de_rand_1_bin_radiuslimited
+  :MaxNumStepsWithoutFuncEvals => 100
+  :RngSeed                     => 1234
+  :MaxFuncEvals                => 0
+  :SaveTrace                   => false
+  :SaveFitnessTraceToCsv       => false
+  :CallbackInterval            => -1.0
+  :TargetFitness               => nothing
+  :TraceMode                   => :compact
+  :MinDeltaFitnessTolerance    => 1.0e-50
+  :FitnessTolerance            => 1.0e-8
+  :TraceInterval               => 0.5
+  :MaxStepsWithoutProgress     => 10000
+  :CallbackFunction            => ##80#81()
+  :MaxSteps                    => 10000
+  :SaveParameters              => false
+  :SearchSpace                 => false
+  :NumRepetitions              => 1
+  :RandomizeRngSeed            => true
+	
+julia> res.parameters.dicts[1]
+DictChain{Symbol,Any}[Dict{Symbol,Any}(:RngSeed=>870901,:NumDimensions=>4,:SearchRange=>(0.0, 1.0),:TraceMode=>:compact,:TraceInterval=>30.0,:Method=>:borg_moea,:FitnessScheme=>ParetoFitnessScheme{2,Float64,true,typeof(sum)}(sum),:MaxSteps=>10000,:PopulationSize=>400),Dict{Symbol,Any}()]
+
+julia> 
+
