@@ -15,12 +15,11 @@ function H2raan(H)
     raan = atan(N[2] / Nxy, N[1] /Nxy)
     return raan
 end
-function newPECMEODesigner(x)
+function lunarnavPECMEODesigner(x; radius = 14e6)
     nsat = (3, 3, 3)
     spacing = (2*pi) ./ nsat
     moon_raan = lunarOrbit.raan
     moon_inc = lunarOrbit.i
-    radius = 14e6
     H = sqrt(radius * earth.gravitationalParameter)
     pecmeo = KeplerConstellation()
 
@@ -154,7 +153,7 @@ end
 
 function evalLunarPecmeo(x; gdop = true, los = true, fast_max = false, dt=200)
     #Create pecmeo from normalized design vector
-    pecmeo = newPECMEODesigner(x)
+    pecmeo = lunarnavPECMEODesigner(x)
 
     # dt = 200   #Simulation timestep
     timevec_pecmeo = 0:dt:orbitalPeriod(lunarOrbit)
@@ -237,23 +236,23 @@ p = plot(layout = (2, 1), legend = false)
 
 # for q in 10000e3:2000e3:26000e3
 #     global r = q
-
+if false
     use2d = true
-    # if use2d
+    if use2d
         #Multi objective constellation optimization
         weightedfitness(f) = f[1] * 0.5 + f[2]*0.5
         global res2 =bboptimize(evalLunarPecmeoFitness2d; Method=:borg_moea,
                     FitnessScheme=ParetoFitnessScheme{2}(is_minimizing=true, aggregator = weightedfitness),
                     SearchRange=(0.0, 1.0), NumDimensions=4, ϵ=0.05,
-                    MaxSteps=50000, TraceInterval=5.0, TraceMode=:compact,PopulationSize=50,
+                    MaxSteps=10, TraceInterval=5.0, TraceMode=:compact,PopulationSize=50,
                     maxTime = 900);
-    # else
+    else
         #Single objective constellation optimization
         global res1 = bboptimize(evalLunarPecmeoFitness1d;
                     SearchRange=(0.0, 1.0), NumDimensions=4, ϵ=0.05,
                     MaxSteps=50000, TraceInterval=5.0, TraceMode=:compact, populationSize = 50,
                     maxTime = 900);
-    # end
+    end
     #
     # global f = vcat(f, best_fitness(res))
     # global c = vcat(c, Tuple(best_candidate(res)))
@@ -261,3 +260,4 @@ p = plot(layout = (2, 1), legend = false)
     # q = evalLunarPecmeo(best_candidate(res))
     # plot!(q.t, [q.gdop q.los] ,layout = (2, 1), legend = false)
 # end
+end
