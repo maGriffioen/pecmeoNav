@@ -10,9 +10,7 @@ pecmeo_nav = lunarnavPECMEODesigner( [0.431459575985078,
  0.962413062424563,
  0.999922037056928])
 
- #Define constellations
- receiverOrbit = moonSat
- navcon = pecmeo_nav
+
 
 arrivaltime = 800e3
 moonAtArival = propagateKeplerOrbit(lunarOrbit, arrivaltime)
@@ -28,6 +26,9 @@ time_depart = arrivaltime - orbitalPeriod(transfer_arrival)/2
 transfer_depart = propagateKeplerOrbit(transfer_arrival, -orbitalPeriod(transfer_arrival)/2)
 transfer_t0 = propagateKeplerOrbit(transfer_arrival, -arrivaltime)
 
+#Define constellations
+navcon = pecmeo_nav
+receiverOrbit = transfer_t0
 
 
 
