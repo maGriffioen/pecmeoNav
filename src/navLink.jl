@@ -43,7 +43,7 @@ function snrCalculation(inertialTime, receiverTime, receiverPosition, transmitte
         # EIRP and free space loss
         EIRP = lin2log( transmitterSettings.transmitPower ) + gainTX  # [dB] effective receiver power
         fsl = lin2log( ( wavelength/( 4*pi*signalDistance ))^2 )    # [db] free space loss
-        attenuation = 2     # [dB] hardware noise, polarization offsets, etc.
+        attenuation = 0     # [dB] hardware noise, polarization offsets, etc.
         receivedPower = EIRP + fsl - attenuation        # [dB] signal Power
 
         # Noise level

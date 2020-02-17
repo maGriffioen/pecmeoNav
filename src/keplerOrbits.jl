@@ -214,7 +214,7 @@ end
 
 
 meanToTrueAnomaly(meanAnomaly::Number, eccentricity::Number) =
-    meanToTrueAnomaly(meanAnomaly, eccentricity, 1e-7)
+    meanToTrueAnomaly(meanAnomaly, eccentricity, 1e-14)
 
 # Find the true anomaly of a Kepler orbit after a timeIncrement
 function propagateKeplerOrbit(ko::KeplerOrbit, timeIncrement::Number)
@@ -277,3 +277,63 @@ createCircPecmeo( radius::Number, n_satellites::Tuple{Int, Int, Int}, cbody::Bod
     createCircPecmeo(radius, n_satellites, cbody, 2*pi ./ n_satellites;
     initialOrbitShift = initialOrbitShift,
     equatorialRotation = equatorialRotation, inclination = inclination)
+
+function H2inc(H)
+    i = acos(H[3] / norm(H))
+    return i
+end
+function H2raan(H)
+    N = cross([0.0, 0.0, 1.0], H)
+    Nxy = norm(N[1:2])
+    raan = atan(N[2] / Nxy, N[1] /Nxy)
+    return raan
+end
+function lunarnavPECMEODesigner(x; radius = 14e6)
+    nsat = (3, 3, 3)
+    spacing = (2*pi) ./ nsat
+    moon_raan = lunarOrbit.raan
+    moon_inc = lunarOrbit.i
+    H = sqrt(radius * earth.gravitationalParameter)
+    pecmeo = KeplerConstellation()
+
+    # Find satellites in a plane polar w.r.t the moon.
+    raan1 = moon_raan
+    inc1 = moon_inc + (pi/2) + (x[1]-0.5)*(pi/2)
+    H1 = [H * sin(inc1) * sin(raan1),
+        -H * sin(inc1) * cos(raan1),
+        H*cos(inc1)]
+
+    # Add satellites for plane 1
+    for i in 1:nsat[1]
+        push!(pecmeo, KeplerOrbit(radius, 0.0, inc1, raan1, 0.0, 0*spacing[1] + (i-1) * spacing[1], earth))
+    end
+
+    # Find second polar plane w.r.t. moon & orthogonal to H1
+    raan2prime = raan1 + (pi/2)
+    inc2prime = (pi/2)
+    H2prime = [H * sin(inc2prime) * sin(raan2prime),
+        -H * sin(inc2prime) * cos(raan2prime),
+        H*cos(inc2prime)]
+    H2 = vector_rotation(H2prime, H1, (x[2]-0.5)*(pi/2))
+    raan2 = H2raan(H2)
+    inc2 = H2inc(H2)
+
+    # Add satellites for plane 2
+    for i in 1:nsat[2]
+        push!(pecmeo, KeplerOrbit(radius, 0.0, inc2, raan2, 0.0, x[3]*spacing[2] + (i-1) * spacing[2], earth))
+    end
+
+    # Find last orbital plane, equatorial for moon
+
+    H3 = vector_rotation(H2, H1, (pi/2))
+    H32 = H * cross(normalize(H1), normalize(H2))
+    raan3 = H2raan(H3)
+    inc3 = H2inc(H3)
+
+    # Add satellites for plane 3
+    for i in 1:nsat[3]
+        push!(pecmeo, KeplerOrbit(radius, 0.0, inc3, raan3, 0.0, x[4]*spacing[3] + (i-1) * spacing[3], earth))
+    end
+
+    return pecmeo
+end

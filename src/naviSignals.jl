@@ -248,6 +248,14 @@ function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiv
         # Check if satellites are connected and within line of sight
         available = los && connection
 
+        if available
+            txSettings = transmitterSettings[prn]
+            snrCalc = snrCalculation(inertialTime, receiverTime, receiverPosition, transmitter,
+                    receiverSettings, txSettings)
+            if snrCalc.cnr < 10 #no connection is available when C/N0 < 10 dB
+                available = false
+            end
+        end
 
         avail[prn] = available
         if (available)
@@ -259,11 +267,9 @@ function simulateMeasurements(inertialTime::Number, receiverTime::Number, receiv
 
             if (addNoise)
                 #Check Link budget and use SNR & C/N0 to determine error SD -> generate errors from this
-                txSettings = transmitterSettings[prn]
-                snrCalc = snrCalculation(inertialTime, receiverTime, receiverPosition, transmitter,
-                        receiverSettings, txSettings)
+
                 cnr = snrCalc.cnr_straight
-                codeSD = sqrt(((4 * 1) / (2*cnr)  )) * 293     # Simple model, allow replacement of model :)
+                codeSD = sqrt(((4 * 0.5) / (2*cnr)  ) * (1+ (1/(receiverSettings.predetectionIntegrationInterval * cnr))) ) * 293     # Simple model, allow replacement of model :)
                 phaseSD =sqrt((receiverSettings.trackingLoopBandwidth / cnr) *
                     (1+ (1/ ( 2*cnr * receiverSettings.predetectionIntegrationInterval )))) * (wavelength/(2*pi))
                 codeError = randn() * codeSD  # Error within receiver system, dependent on SNR

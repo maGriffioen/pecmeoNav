@@ -1,6 +1,7 @@
 include("../src/NaviSimu_adder.jl")
 using Main.NaviSimu, Test, DoubleFloats
 
+
 @testset "Position Algorithms" begin
     @testset "Reader Pieter Visser" begin
         # First, some test from Reader_AE2223-II_Analysis_4April2016.pdf (by Prof. Visser)
@@ -13,38 +14,41 @@ using Main.NaviSimu, Test, DoubleFloats
             [1000.0, 0.0, 0.0, 0.0] atol = 1e-8
 
         #Tests example calcultion DOP
-        @test findNavGDOP((1000.0, 0.0, 0.0), gps_positions; checkLineOfSight = false) ≈ 1.58 atol = 1e-2
-        @test findNavPDOP((1000.0, 0.0, 0.0), gps_positions; checkLineOfSight = false) ≈ 1.5 atol = 1e-8
+        @test findNavGDOP((1000.0, 0.0, 0.0), gps_positions; checkLineOfSightEarth = false) ≈ 1.58 atol = 1e-2
+        @test findNavPDOP((1000.0, 0.0, 0.0), gps_positions; checkLineOfSightEarth = false) ≈ 1.5 atol = 1e-8
 
         # Tests for DOPS in another reference system
 
         # Tests TDOP
     end
 
-    @testset "Line of slight" begin
-        # Tests for single satellites with line of sight
+    @testset "Signal blockage" begin
+        # Test of the signal blockage algorithm by calculating the eclispe time
+        # And comparing this to the analytically calcualted eclipse time.
+        earth_small = Body("Earth_small", earth.gravitationalParameter, earth.radius-800e3, earth.stateFunction)
+        lunarorbit_circular = KeplerOrbit(lunarOrbit.a, 0.0, lunarOrbit.i, lunarOrbit.raan, lunarOrbit.aop, lunarOrbit.tanom, earth)
+        transmitter_orbit = KeplerOrbit(14e6, 0.0, lunarOrbit.i, lunarOrbit.raan, lunarOrbit.aop, lunarOrbit.tanom, earth)
 
-        # Tests for multiple satellites without line of sight
+        los_list = []
+        dt = 0.01
+        ts = 0.0:dt:orbitalPeriod(transmitter_orbit)
 
-        # Test for multiple satellties along body with and without line of sight
+        for t in ts
+            moonpos = globalPosition(lunarorbit_circular, t)
+            transpos = globalPosition(transmitter_orbit, t)
+            los = hasLineOfSight(moonpos, transpos, bodyPosition(earth, 0.0), earth.radius)
+            append!(los_list, los)
+        end
+        blocked_epochs = .!los_list
+        block_times = ts[blocked_epochs]
+        time_blocked = block_times[end] - block_times[1]
 
-        #Test for line of sight with a constellation
-    end
+        #Analytical eclipse time:
+        n_combined = (2*pi/orbitalPeriod(transmitter_orbit)) - (2*pi/orbitalPeriod(lunarorbit_circular))
+        eclipse_angle = pi-2*acos(earth.radius/transmitter_orbit.a) + 2*asin(earth.radius/lunarorbit_circular.a)
+        eclipse_time_analytical = eclipse_angle / n_combined
 
-    @testset "Perfect measurements" begin
-        # Test with generating perfect measurements
-
-        # Test with the point position solution
-
-        # Test with kinematic algorithm
-    end
-
-    @testset "Nonperfect measurements" begin
-        # Tests with generating simualted measureemnts
-
-        # Tests with point position solutions from this
-
-        # Tests with kinematic algorithm
+        @test time_blocked < eclipse_time_analytical < time_blocked + 2*dt
     end
 
     @testset "Lighttime correction SPICE test" begin

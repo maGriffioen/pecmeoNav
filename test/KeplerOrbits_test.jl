@@ -1,7 +1,7 @@
 include("../src/NaviSimu_adder.jl")
 using Main.NaviSimu, Test, DoubleFloats
 
-@testset "KeplerOrbits" begin
+ @testset "KeplerOrbits" begin
 
     # Definition of Earth as per Orbit and constellation design and management book
     earth_ocdm_statefun(t::Number) = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
@@ -16,9 +16,9 @@ using Main.NaviSimu, Test, DoubleFloats
         @test keplerToCartesian(orbit_iss_kepler).x ≈ orbit_iss_cartesian.x
         @test keplerToCartesian(orbit_iss_kepler).y ≈ orbit_iss_cartesian.y
         @test keplerToCartesian(orbit_iss_kepler).z ≈ orbit_iss_cartesian.z
-        @test keplerToCartesian(orbit_iss_kepler).vx ≈ orbit_iss_cartesian.vx
-        @test keplerToCartesian(orbit_iss_kepler).vy ≈ orbit_iss_cartesian.vy
-        @test keplerToCartesian(orbit_iss_kepler).vz ≈ orbit_iss_cartesian.vz
+        @test keplerToCartesian(orbit_iss_kepler).vx ≈ orbit_iss_cartesian.vx rtol=1e-8
+        @test keplerToCartesian(orbit_iss_kepler).vy ≈ orbit_iss_cartesian.vy rtol=1e-8
+        @test keplerToCartesian(orbit_iss_kepler).vz ≈ orbit_iss_cartesian.vz rtol=1e-8
         @test rad2deg(NaviSimu.findEccentricAnomaly(orbit_iss_kepler)) ≈ 24.08317766
         @test rad2deg(NaviSimu.findMeanAnomaly(orbit_iss_kepler)) ≈ 24.06608426
 
@@ -27,7 +27,7 @@ using Main.NaviSimu, Test, DoubleFloats
         @test cartesianToKepler(orbit_iss_cartesian).i ≈ orbit_iss_kepler.i
         @test cartesianToKepler(orbit_iss_cartesian).raan ≈ orbit_iss_kepler.raan
         @test cartesianToKepler(orbit_iss_cartesian).aop ≈ orbit_iss_kepler.aop
-        @test cartesianToKepler(orbit_iss_cartesian).tanom ≈ orbit_iss_kepler.tanom
+        @test cartesianToKepler(orbit_iss_cartesian).tanom ≈ orbit_iss_kepler.tanom rtol=1e-8
     end
 
     # Cryosat orbit tests
@@ -57,9 +57,20 @@ using Main.NaviSimu, Test, DoubleFloats
     @test globalState(test_constellation_propagated, df64"999")[1] ≈
         [4.534898326006999e6, -5.005955629866256e6, -689296.9878195832, 3133.2226716658233, 3652.2124952973027, -5961.040511467195]
 
+    @test propagateKeplerOrbit(orbit_iss_kepler, orbitalPeriod(orbit_iss_kepler)).tanom ≈ orbit_iss_kepler.tanom
+    # print(rad2deg(propagateKeplerOrbit(orbit_iss_kepler, orbitalPeriod(orbit_iss_kepler)).tanom - orbit_iss_kepler.tanom))
+    @test NaviSimu.findMeanAnomaly(propagateKeplerOrbit(orbit_iss_kepler, orbitalPeriod(orbit_iss_kepler)/4)) ≈ (NaviSimu.findMeanAnomaly(orbit_iss_kepler) + Double64(pi)/2) rtol = 1e-12
+    # print(rad2deg(NaviSimu.findMeanAnomaly(propagateKeplerOrbit(orbit_iss_kepler, orbitalPeriod(orbit_iss_kepler)/4)) - (NaviSimu.findMeanAnomaly(orbit_iss_kepler) + Double64(pi)/2)))
+
+    @test propagateKeplerOrbit(orbit_cryosat_kepler, orbitalPeriod(orbit_cryosat_kepler)).tanom ≈ orbit_cryosat_kepler.tanom
+    # print(rad2deg(propagateKeplerOrbit(orbit_cryosat_kepler, orbitalPeriod(orbit_cryosat_kepler)).tanom - orbit_cryosat_kepler.tanom))
+    @test NaviSimu.findMeanAnomaly(propagateKeplerOrbit(orbit_cryosat_kepler, orbitalPeriod(orbit_cryosat_kepler)/4)) ≈ NaviSimu.findMeanAnomaly(orbit_cryosat_kepler) + Double64(pi)/2  rtol = 1e-12
+    # print(rad2deg( NaviSimu.findMeanAnomaly(propagateKeplerOrbit(orbit_cryosat_kepler, orbitalPeriod(orbit_cryosat_kepler)/4)) - (NaviSimu.findMeanAnomaly(orbit_cryosat_kepler) + Double64(pi)/2) ))
+
+
     # GEO tests, including propagation
     orbit_geo = KeplerOrbit(df64"42164172.83", df64"0", df64"0", df64"0", df64"0", df64"0", earth_ocdm)
     @test orbitalPeriod(orbit_geo) ≈ 86164.1004
     @test Float64(propagateKeplerOrbit(orbit_geo, 43082.0502).tanom) ≈ pi   #DoubleFloat accuracy is too high to be approximately pi for half an orbit
     @test Float64(propagateKeplerOrbit(orbit_geo, 21541.0251).tanom) ≈ 0.5*pi
-end
+ end

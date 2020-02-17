@@ -105,6 +105,31 @@ function noisyKeplerEphemeris(times::Array{<:Number}, orbit::KeplerOrbit, noise:
     return KeplerEphemeris(times, orbit_array)
 end
 
+# Induce ephemeris errors along 3 orthogonal axis into the Kepler elements (semi-major axis, anomaly and inclination)
+# Expect the mean RSS error to be sqrt(3) * noise
+function noisyKeplerEphemeris(times::Array{<:Number}, orbit::KeplerOrbit, noise::Number)
+    orbit_array = Array{KeplerOrbit, 1}(undef, 0)
+    
+    for t in times
+        normError = randn(6)
+        curr_orbit = propagateKeplerOrbit(orbit, t)
+        sigma_a = noise
+        sigma_i = noise * (1/curr_orbit.a)
+        sigma_tanom = noise * sqrt(2)* (1/curr_orbit.a)
+        noisyOrbit = KeplerOrbit(
+            curr_orbit.a + sigma_a * normError[1],
+            curr_orbit.e,
+            curr_orbit.i + sigma_i * normError[3],
+            curr_orbit.raan,
+            curr_orbit.aop,
+            curr_orbit.tanom + sigma_tanom * normError[6],
+            curr_orbit.cbody
+        )
+        push!(orbit_array, noisyOrbit)
+    end
+
+    return KeplerEphemeris(times, orbit_array)
+end
 
 # Generate a disturbed Kepler Ephemeris from state Noise
 #TODO: MAKE THIS FUNCTION

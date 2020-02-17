@@ -18,7 +18,9 @@ function plotConstellation(constellation::KeplerConstellation;
     body_radius= earth.radius/1e3, body_type=:lines,
     body_color = RGB(0.306, 0.51, 0.137),
     orbits = true,
-    use_plot::Plots.Plot= Plots.plot())
+    show_sats = true,
+    use_plot::Plots.Plot= Plots.plot(),
+    line_color = RGB(0.569, 0.271, 0.153))
 
     # Detail in the plotted sphere
     body_resolution = 36
@@ -46,7 +48,7 @@ function plotConstellation(constellation::KeplerConstellation;
                 append!(y_pos, cartOrbit.y/1e3)
                 append!(z_pos, cartOrbit.z/1e3)
             end
-            Plots.plot!(x_pos, y_pos, z_pos, w= 2.0, c=RGB(0.569, 0.271, 0.153))
+            Plots.plot!(x_pos, y_pos, z_pos, w= 2.0, c=line_color)
         end
     end
     # Satellite location marker size depends on backend
@@ -56,20 +58,29 @@ function plotConstellation(constellation::KeplerConstellation;
     elseif Plots.backend_name() in [:gr]
         sat_size = 5
     end
-    for isat in 1:nsats
-        # Get the current positon only
-        cartOrbit = keplerToCartesian(constellation[isat])
-        x_pos = [cartOrbit.x/1e3]
-        y_pos = [cartOrbit.y/1e3]
-        z_pos = [cartOrbit.z/1e3]
+    if show_sats
+        for isat in 1:nsats
+            # Get the current positon only
+            cartOrbit = keplerToCartesian(constellation[isat])
+            x_pos = [cartOrbit.x/1e3]
+            y_pos = [cartOrbit.y/1e3]
+            z_pos = [cartOrbit.z/1e3]
 
-        # Show the current satellite location
-        Plots.scatter!([x_pos[1]], [y_pos[1]], [z_pos[1]], markersize=sat_size, c=RGB(0.51, 0.137, 0.251))
+            # Show the current satellite location
+            Plots.scatter!([x_pos[1]], [y_pos[1]], [z_pos[1]], markersize=sat_size, c=line_color)
+        end
     end
-
     # Ensure the plot opens when running function by returning plot
     return use_plot
 end
+
+# plotConstellation(constellation::KeplerOrbit;
+#     body_radius= earth.radius/1e3, body_type=:lines,
+#     body_color = RGB(0.306, 0.51, 0.137),
+#     orbits = true,
+#     use_plot::Plots.Plot= Plots.plot()) = plotConstellation(constellation = KeplerConstellation([KeplerOrbit]);
+#     body_radius = body_radius, body_type = body_type,
+#     body_color = body_color, orbits=orbits, use_plot=use_plot)
 
 function pointsInFullOrbit(kepOrbit::KeplerOrbit; n = 50)
     x_pos = zeros(n)

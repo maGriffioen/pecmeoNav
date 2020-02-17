@@ -306,6 +306,69 @@ function sequentialPointPosition(epochTimes, navigationEphemeris::Array{<:Epheme
         lastCorrections = lastCorrections, iterations=iterations)
 end
 
+function sequentialPointPosition_aprioriPropagation(epochTimes, navigationEphemeris::Array{<:Ephemeris},
+    pseudoRanges, availability; aprioriEstimation = [0.0], maxIter = 10, correctionLimit = 1e-8,
+    lighttimeCorrection = true)
+
+
+    n_epochs = length(epochTimes)
+
+    # Check validity of apriori estimations, and create zeros to reset when needed
+    aprioriEstimations = zeros(n_epochs, 4)
+    if size(aprioriEstimation, 1) == 4 && size(aprioriEstimation, 2) == 1
+        aprioriEstimations[1, :] = aprioriEstimation
+    end
+    # if (aprioriEstimations == [0.0])
+    #     aprioriEstimations = zeros(n_epochs, 4)
+
+    # elseif (size(aprioriEstimations, 1) != n_epochs
+    #     || size(aprioriEstimations, 2) != 4)
+    #
+    #     print("sequentialPointPosition: Input apriori estimations of size ",
+    #     size(aprioriEstimations), ", ", (n_epochs, 4), " expected.
+    #     Zero vector used instead.")
+    #
+    #     aprioriEstimations = zeros(n_epochs, 4)
+    # end
+
+
+    # Ability to bipass lighttime correction with old point position estimation
+    # It is recommended to keep ltc = true
+    ltc = true
+    ppResult = []
+
+    if !ltc
+        for epoch in 1:n_epochs
+            temp_res = pointPosition(pseudoRanges[epoch, availability[epoch, :]],
+                        [globalPosition(navigationEphemeris[i], epochTimes[epoch]) for i in 1:length(navigationEphemeris)][availability[epoch, :]],
+                        epochTimes[epoch];
+                        maxIter=maxIter, correctionLimit=correctionLimit,
+                        aprioriEstimation = aprioriEstimations[epoch, :],
+                        lighttimeCorrection = lighttimeCorrection)
+            aprioriEstimation = temp_res.estimation
+            push!(ppResult, temp_res)
+        end
+    else
+        for epoch in 1:n_epochs
+            temp_res = pointPosition(pseudoRanges[epoch, availability[epoch, :]],
+                        navigationEphemeris[availability[epoch, :]],
+                        epochTimes[epoch];
+                        maxIter=maxIter, correctionLimit=correctionLimit,
+                        aprioriEstimation = aprioriEstimation,
+                        lighttimeCorrection = lighttimeCorrection)
+            aprioriEstimation = temp_res.estimation
+            push!(ppResult, temp_res)
+        end
+    end
+    ppEstimation = [i.estimation for i in ppResult]
+    estimationSuccess = [i.success for i in ppResult]
+    lastCorrections = [i.lastCorrection for i in ppResult]
+    iterations = [i.iterations for i in ppResult]
+
+    return (estimation = ppEstimation, resultValidity = estimationSuccess,
+        lastCorrections = lastCorrections, iterations=iterations)
+end
+
 
 function findMeasurementArchs(availabilityMatrix)
     # arch=0

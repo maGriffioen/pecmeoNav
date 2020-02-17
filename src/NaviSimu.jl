@@ -23,6 +23,7 @@ export
     globalPosition,
     localState,
     globalState,
+    lunarnavPECMEODesigner,
 
     #bodies.jl
     earth,

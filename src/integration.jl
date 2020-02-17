@@ -123,9 +123,10 @@ function integration_interpolationRK4(timeODE::Function, interpolValues,
     t_inter = Array{Float64}(undef, 0)
     y_inter = Array{Float64}(undef, 0)
     dydt_inter = Array{Float64}(undef, 0)
+    errors = Array{Float64}(undef, 0)
 
     #Perform integration steps until time is beyond timespan
-    while t_curr < interpolValues[end] && interpolInt_curr <= length(interpolValues)
+    while t_curr <= interpolValues[end] && interpolInt_curr <= length(interpolValues)
 
         #Calculate propagation step
         new = rk4Step(odefun, t_curr, y_curr, dydt_curr, h)
@@ -151,7 +152,7 @@ function integration_interpolationRK4(timeODE::Function, interpolValues,
                 iter += 1
             end
 
-            if iter >1
+            if iter >=1
                 println("Many iterations: \t", iter, " @t_m= ", interpolVal_tofind)
             end
             # println(iter)
@@ -160,6 +161,7 @@ function integration_interpolationRK4(timeODE::Function, interpolValues,
             append!(t_inter, root.t)
             append!(y_inter, root.y)
             append!(dydt_inter, root.dydt)
+            append!(errors, error)
 
             interpolInt_curr += 1
             # print(interpolInt_curr)
@@ -180,7 +182,7 @@ function integration_interpolationRK4(timeODE::Function, interpolValues,
     y_inter = reshape(y_inter, Int(length(y_inter)/length(t_inter)), length(t_inter))
     dydt_inter = reshape(dydt_inter, Int(length(dydt_inter)/length(t_inter)), length(t_inter))
 
-    return (y = y_inter, t = t_inter, dydt = dydt_inter)
+    return (y = y_inter, t = t_inter, dydt = dydt_inter, interpolErrors = errors)
 end
 
 # Propagate single RK4 step, based on current time, y vector, dy/dt and step size.
